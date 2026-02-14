@@ -4,7 +4,7 @@ import { useState } from "react";
 import {
   Sun, Car, Battery, Home, CarFront, Thermometer, Refrigerator,
   Gauge, Bike, Wind, Users, Lightbulb, Bus, ClipboardCheck, Sprout, Landmark,
-  TreePine, DollarSign, ChevronDown,
+  TreePine, DollarSign, ChevronDown, Wallet, CreditCard,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,9 +24,10 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
 interface ActionCardsProps {
   investments: GreenInvestment[];
   geminiAnalysis: GeminiAnalysis | null;
+  availableSavings?: number | null;
 }
 
-export function ActionCards({ investments, geminiAnalysis }: ActionCardsProps) {
+export function ActionCards({ investments, geminiAnalysis, availableSavings }: ActionCardsProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const getInsight = (id: string) => {
@@ -81,6 +82,29 @@ export function ActionCards({ investments, geminiAnalysis }: ActionCardsProps) {
                     </div>
                   )}
                 </div>
+
+                {/* Affordability badge */}
+                {availableSavings != null && availableSavings > 0 && (
+                  <div className="mt-3">
+                    {inv.estimatedCost === 0 ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-canopy bg-canopy/10 px-2.5 py-1 rounded-full">
+                        <Wallet className="w-3 h-3" /> Free — no cost
+                      </span>
+                    ) : inv.estimatedCost <= availableSavings ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-canopy bg-canopy/10 px-2.5 py-1 rounded-full">
+                        <Wallet className="w-3 h-3" /> Can pay upfront from savings
+                      </span>
+                    ) : inv.estimatedCost <= availableSavings * 2 ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-sunbeam bg-sunbeam/10 px-2.5 py-1 rounded-full">
+                        <CreditCard className="w-3 h-3" /> Partial savings + financing
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-stone bg-stone/10 px-2.5 py-1 rounded-full">
+                        <CreditCard className="w-3 h-3" /> Requires financing
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {/* Gemini insight */}
                 {insight && (

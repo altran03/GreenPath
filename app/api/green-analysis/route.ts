@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(analysis);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Gemini analysis failed";
+    console.error("[green-analysis]", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

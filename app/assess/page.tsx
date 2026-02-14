@@ -106,6 +106,7 @@ interface FormData {
   city: string;
   state: string;
   postalCode: string;
+  availableSavings: string;
 }
 
 const LOADING_STEPS = [
@@ -128,6 +129,7 @@ export default function AssessPage() {
     city: "",
     state: "",
     postalCode: "",
+    availableSavings: "",
   });
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
@@ -146,6 +148,7 @@ export default function AssessPage() {
       city: persona.city,
       state: persona.state,
       postalCode: persona.postalCode,
+      availableSavings: "15000",
     });
     setTestMenuOpen(false);
   }
@@ -209,12 +212,14 @@ export default function AssessPage() {
       }
 
       // Store results in sessionStorage and navigate
+      const savings = form.availableSavings ? parseFloat(form.availableSavings) : null;
       const results = {
         userName: `${form.firstName} ${form.lastName}`,
         creditReport,
         greenReadiness,
         investments,
         geminiAnalysis,
+        availableSavings: savings,
       };
       sessionStorage.setItem("greenpath-results", JSON.stringify(results));
       router.push("/results");
@@ -434,6 +439,28 @@ export default function AssessPage() {
                     placeholder="94103"
                   />
                 </div>
+              </div>
+
+              {/* Available Savings */}
+              <div className="pt-2 border-t border-dew/30">
+                <Label htmlFor="availableSavings" className="text-grove font-medium text-sm mb-1.5 block">
+                  Available Savings (optional)
+                </Label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone text-sm">$</span>
+                  <Input
+                    id="availableSavings"
+                    type="number"
+                    min="0"
+                    value={form.availableSavings}
+                    onChange={(e) => updateField("availableSavings", e.target.value)}
+                    className="rounded-xl border-dew/60 focus:border-canopy focus:ring-canopy/20 pl-7"
+                    placeholder="e.g. 10000"
+                  />
+                </div>
+                <p className="text-xs text-stone mt-1.5">
+                  Self-reported — helps us show which green investments you can pay upfront vs. finance. Not sent to any credit bureau.
+                </p>
               </div>
 
               {/* Disclaimer */}

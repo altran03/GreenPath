@@ -23,6 +23,7 @@ interface ResultsData {
   greenReadiness: GreenReadiness;
   investments: GreenInvestment[];
   geminiAnalysis: GeminiAnalysis | null;
+  availableSavings: number | null;
 }
 
 export default function ResultsPage() {
@@ -140,7 +141,7 @@ export default function ResultsPage() {
           <p className="text-stone text-sm mb-5">
             {data.investments.length} investments matched to your Tier {data.greenReadiness.tier} profile, sorted by environmental impact.
           </p>
-          <ActionCards investments={data.investments} geminiAnalysis={data.geminiAnalysis} />
+          <ActionCards investments={data.investments} geminiAnalysis={data.geminiAnalysis} availableSavings={data.availableSavings} />
         </section>
 
         {/* Environmental Impact */}
@@ -161,7 +162,7 @@ export default function ResultsPage() {
           <h2 className="font-heading text-2xl text-grove mb-4">
             Ask GreenPath AI
           </h2>
-          <GreenChat greenReadiness={data.greenReadiness} investments={data.investments} />
+          <GreenChat greenReadiness={data.greenReadiness} investments={data.investments} availableSavings={data.availableSavings} />
         </section>
       </main>
 

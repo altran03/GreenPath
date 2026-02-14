@@ -6,3 +6,17 @@ services:
     env_file:
       - .env.local
     restart: unless-stopped
+    develop:
+      watch:
+        - action: rebuild
+          path: ./package.json
+        - action: rebuild
+          path: ./package-lock.json
+        - action: rebuild
+          path: ./app
+        - action: rebuild
+          path: ./components
+        - action: rebuild
+          path: ./lib
+        - action: rebuild
+          path: ./public

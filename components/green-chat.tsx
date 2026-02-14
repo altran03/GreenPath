@@ -17,6 +17,7 @@ interface Message {
 interface GreenChatProps {
   greenReadiness: GreenReadiness;
   investments: GreenInvestment[];
+  availableSavings?: number | null;
 }
 
 const SUGGESTIONS = [
@@ -26,7 +27,7 @@ const SUGGESTIONS = [
   "What are the best green investments for beginners?",
 ];
 
-export function GreenChat({ greenReadiness, investments }: GreenChatProps) {
+export function GreenChat({ greenReadiness, investments, availableSavings }: GreenChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -56,14 +57,17 @@ export function GreenChat({ greenReadiness, investments }: GreenChatProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: newMessages,
-          context: { greenReadiness, investments },
+          context: { greenReadiness, investments, availableSavings },
         }),
       });
 
-      if (!res.ok) throw new Error("Chat request failed");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(errData.error || `Request failed (${res.status})`);
+      }
 
       const reader = res.body?.getReader();
-      if (!reader) throw new Error("No response stream");
+      if (!reader) throw new Error("No response stream available");
 
       const decoder = new TextDecoder();
       let assistantContent = "";
@@ -80,6 +84,9 @@ export function GreenChat({ greenReadiness, investments }: GreenChatProps) {
           if (data === "[DONE]") break;
           try {
             const parsed = JSON.parse(data);
+            if (parsed.error) {
+              throw new Error(parsed.error);
+            }
             if (parsed.text) {
               assistantContent += parsed.text;
               setMessages([
@@ -87,17 +94,21 @@ export function GreenChat({ greenReadiness, investments }: GreenChatProps) {
                 { role: "assistant", content: assistantContent },
               ]);
             }
-          } catch {
-            // Skip malformed lines
+          } catch (e) {
+            if (e instanceof Error && e.message !== "Unexpected end of JSON input") {
+              throw e;
+            }
           }
         }
       }
-    } catch {
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Unknown error";
+      console.error("[GreenChat]", errorMsg);
       setMessages([
         ...newMessages,
         {
           role: "assistant",
-          content: "Sorry, I couldn't process that. Please try again.",
+          content: `⚠️ ${errorMsg}`,
         },
       ]);
     } finally {
