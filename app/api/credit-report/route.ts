@@ -14,7 +14,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Pull all 3 bureaus in parallel
+    console.log("[credit-report] Pulling tri-bureau (Experian, TransUnion, Equifax)");
     const triBureau = await pullTriBureauReports(body);
+    console.log("[credit-report] Tri-bureau done:", {
+      experian: !!triBureau.experian,
+      transunion: !!triBureau.transunion,
+      equifax: !!triBureau.equifax,
+    });
 
     // Use Experian as the primary (guaranteed to work with original config)
     // Include all 3 in the response
@@ -28,17 +34,6 @@ export async function POST(request: NextRequest) {
         equifax: triBureau.equifax,
       },
     };
-    console.log("[credit-report] Response payload (summary)", {
-      hasExperian: !!triBureau.experian,
-      hasTransUnion: !!triBureau.transunion,
-      hasEquifax: !!triBureau.equifax,
-      scores: [
-        triBureau.experian && (triBureau.experian as { scores?: unknown[] }).scores?.[0],
-        triBureau.transunion && (triBureau.transunion as { scores?: unknown[] }).scores?.[0],
-        triBureau.equifax && (triBureau.equifax as { scores?: unknown[] }).scores?.[0],
-      ],
-      fullResponse: responsePayload,
-    });
 
     if (!primary) {
       return NextResponse.json(

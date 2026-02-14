@@ -47,8 +47,7 @@ export default function LandingPage() {
           </h1>
 
           <p className="animate-fade-up delay-200 text-lg sm:text-xl text-soil/80 max-w-2xl mx-auto mb-10 leading-relaxed">
-            See which green investments you can actually afford based on your
-            credit profile — personalized by AI in 30 seconds.
+            Wrong credit data leads to wrong decisions. We verify your credit across all three bureaus, catch errors and fraud, then show you sustainable financing you actually qualify for.
           </p>
 
           <div className="animate-fade-up delay-300 flex flex-col sm:flex-row gap-4 justify-center items-center">
@@ -79,11 +78,10 @@ export default function LandingPage() {
                 <Shield className="w-7 h-7 text-canopy" />
               </div>
               <h3 className="font-heading text-2xl text-grove mb-3">
-                Credit-Powered
+                Verify First
               </h3>
               <p className="text-soil/70 leading-relaxed">
-                We analyze your credit profile with a soft pull through the CRS
-                API. No impact to your score — ever.
+                We pull from all three bureaus, verify identity, and run fraud checks so your credit picture is accurate before we show you what you qualify for.
               </p>
             </div>
 
@@ -130,9 +128,9 @@ export default function LandingPage() {
             <div className="hidden sm:block absolute top-8 left-[20%] right-[20%] h-px bg-gradient-to-r from-dew via-canopy/30 to-dew" />
 
             {[
-              { step: "01", title: "Enter your info", desc: "We just need basic details for a soft credit pull — takes 30 seconds." },
-              { step: "02", title: "AI analyzes", desc: "Your credit profile is scored and analyzed by Gemini for green readiness." },
-              { step: "03", title: "Get your roadmap", desc: "See personalized green investments ranked by feasibility and impact." },
+              { step: "01", title: "Pull your report", desc: "We pull from all three bureaus (soft pull), verify your identity, and check for fraud and discrepancies." },
+              { step: "02", title: "Clean credit picture", desc: "If we find mismatches, you review and correct them. Then you see your verified credit profile." },
+              { step: "03", title: "What you qualify for", desc: "Based on that profile, we show sustainable financing options you’re eligible for and a roadmap to unlock more." },
             ].map((item, i) => (
               <div key={item.step} className={`animate-fade-up delay-${(i + 4) * 100} relative`}>
                 <div className="w-16 h-16 rounded-full bg-grove text-white font-heading text-2xl flex items-center justify-center mx-auto mb-5 relative z-10">

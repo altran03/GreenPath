@@ -96,6 +96,7 @@ export async function pullCreditReport(
     ],
   };
 
+  console.log(`[crs] Pulling ${bureau} bureau`);
   const res = await fetch(getBureauEndpoint(bureau), {
     method: "POST",
     headers: {
@@ -117,7 +118,6 @@ export async function pullCreditReport(
   }
 
   const data = await res.json();
-  console.log(`[crs] ${bureau} bureau response`, data);
   return data as Record<string, unknown>;
 }
 
@@ -182,15 +182,24 @@ export async function verifyIdentityFlexID(
   const dob = (input.dateOfBirth || "").trim();
   const dobValid = /^\d{4}-\d{2}-\d{2}$/.test(dob);
 
-  const body: Record<string, string> = {
+  // FlexID API expects streetAddress1 (not streetAddress) and zipCode exactly 5 digits
+  const zipDigits = input.zipCode.replace(/\D/g, "");
+  const zip5 = zipDigits.length >= 5 ? zipDigits.slice(0, 5) : zipDigits;
+
+  // Send full 9-digit SSN when available; sandbox test personas match on full SSN
+  const ssnDigits = input.ssn.replace(/\D/g, "");
+  const ssnForFlex = ssnDigits.length >= 9 ? ssnDigits.slice(0, 9) : ssnDigits.slice(-4);
+
+  const body: Record<string, string | boolean> = {
     firstName: input.firstName,
     lastName: input.lastName,
-    ssn: input.ssn.replace(/\D/g, "").slice(-4), // Last 4 only
-    streetAddress: input.streetAddress,
+    ssn: ssnForFlex,
+    streetAddress1: input.streetAddress,
     city: input.city,
     state: input.state,
-    zipCode: input.zipCode.replace(/\D/g, ""),
+    zipCode: zip5,
     homePhone: input.homePhone?.replace(/\D/g, "") || "",
+    includeVerifiedElementSummary: true,
   };
   if (dobValid) body.dateOfBirth = dob;
 
@@ -215,6 +224,11 @@ export async function verifyIdentityFlexID(
   }
 
   const data = await res.json();
+
+  // Log raw FlexID response in dev so you can inspect CVI, verifiedElementSummary, etc.
+  if (process.env.NODE_ENV === "development") {
+    console.log("[flex-id] Raw response:", JSON.stringify(data, null, 2));
+  }
 
   // Parse real FlexID response structure
   // data.result.comprehensiveVerification.comprehensiveVerificationIndex = CVI score
@@ -264,6 +278,15 @@ export interface FraudFinderResult {
   raw: Record<string, unknown>;
 }
 
+/** Format US postal code for Fraud Finder API: 12345 or 12345-6789 only. */
+function formatPostalCodeForFraudFinder(postalCode: string): string {
+  const digits = postalCode.replace(/\D/g, "");
+  if (digits.length >= 9) {
+    return `${digits.slice(0, 5)}-${digits.slice(5, 9)}`;
+  }
+  return digits.slice(0, 5) || "";
+}
+
 export async function runFraudFinder(
   input: FraudFinderInput,
   retried = false
@@ -280,7 +303,7 @@ export async function runFraudFinder(
       addressLine1: input.addressLine1,
       city: input.city,
       state: input.state,
-      postalCode: input.postalCode.replace(/\D/g, ""),
+      postalCode: formatPostalCodeForFraudFinder(input.postalCode),
     },
   };
 

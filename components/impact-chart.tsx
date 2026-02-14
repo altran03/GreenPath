@@ -44,6 +44,9 @@ export function ImpactChart({ investments }: ImpactChartProps) {
 
   return (
     <div className="space-y-6">
+      <p className="text-stone text-sm -mt-1">
+        If you adopt all recommended actions below, your combined annual impact would look like this. Use these metrics to see how your choices add up and to compare with everyday references.
+      </p>
       {/* Summary Stats */}
       <div className="grid sm:grid-cols-3 gap-4">
         <Card className="rounded-2xl border-dew/40">
@@ -55,7 +58,10 @@ export function ImpactChart({ investments }: ImpactChartProps) {
               <div className="font-heading text-2xl text-grove">
                 {formatNumber(totalCO2)}
               </div>
-              <div className="text-xs text-stone">lbs CO₂ saved/year</div>
+              <div className="text-xs font-medium text-grove">lbs CO₂ saved/year</div>
+              <div className="text-xs text-stone mt-0.5">
+                Total carbon avoided annually by all recommended actions — equivalent to a large share of a typical household’s direct emissions.
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -68,7 +74,10 @@ export function ImpactChart({ investments }: ImpactChartProps) {
               <div className="font-heading text-2xl text-grove">
                 {formatNumber(trees)}
               </div>
-              <div className="text-xs text-stone">tree equivalents</div>
+              <div className="text-xs font-medium text-grove">tree equivalents</div>
+              <div className="text-xs text-stone mt-0.5">
+                Same amount of CO₂ that this many mature trees absorb in a year — helps visualize your impact in a tangible way.
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -81,7 +90,10 @@ export function ImpactChart({ investments }: ImpactChartProps) {
               <div className="font-heading text-2xl text-grove">
                 {formatNumber(miles)}
               </div>
-              <div className="text-xs text-stone">miles not driven</div>
+              <div className="text-xs font-medium text-grove">miles not driven</div>
+              <div className="text-xs text-stone mt-0.5">
+                Equivalent to avoiding this many miles in an average gasoline car — from tailpipe emissions you’re not adding to the atmosphere.
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -92,7 +104,10 @@ export function ImpactChart({ investments }: ImpactChartProps) {
         {/* CO2 Bar Chart */}
         <Card className="rounded-2xl border-dew/40">
           <CardContent className="p-6">
-            <h4 className="font-semibold text-grove mb-4">CO₂ Reduction by Investment</h4>
+            <h4 className="font-semibold text-grove mb-1">CO₂ Reduction by Investment</h4>
+            <p className="text-xs text-stone mb-4">
+              Annual pounds of CO₂ avoided per action — prioritize longer bars for the biggest climate impact.
+            </p>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={barData} layout="vertical" margin={{ left: 0, right: 16 }}>
@@ -155,6 +170,9 @@ export function ImpactChart({ investments }: ImpactChartProps) {
           </CardContent>
         </Card>
       </div>
+      <p className="text-[11px] text-stone/80">
+        Tree equivalents use ~48 lbs CO₂/year per mature tree; miles not driven use ~0.89 lbs CO₂/mile (EPA average passenger vehicle). Totals assume you adopt all recommended actions.
+      </p>
     </div>
   );
 }

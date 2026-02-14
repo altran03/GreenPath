@@ -93,6 +93,31 @@ const TEST_PERSONAS = [
     state: "CA",
     postalCode: "937107453",
   },
+  {
+    label: "John Cope (CA) — FlexID only",
+    firstName: "JOHN",
+    middleName: "",
+    lastName: "COPE",
+    ssn: "574709961",
+    birthDate: "1973-08-01",
+    addressLine1: "511 SYCAMORE AVE",
+    city: "HAYWARD",
+    state: "CA",
+    postalCode: "94544",
+    phone: "5105811251",
+  },
+  {
+    label: "Kylia Paolimelli (NM)",
+    firstName: "KYLIA",
+    middleName: "",
+    lastName: "PAOLIMELLI",
+    ssn: "666285642",
+    birthDate: "1920-01-01",
+    addressLine1: "406 E JEMEZ ST",
+    city: "HOBBS",
+    state: "NM",
+    postalCode: "882403443",
+  },
 ];
 
 interface FormData {
@@ -150,12 +175,12 @@ export default function AssessPage() {
       birthDate: persona.birthDate,
       ssn: persona.ssn,
       addressLine1: persona.addressLine1,
-      addressLine2: "",
+      addressLine2: "addressLine2" in persona ? persona.addressLine2 ?? "" : "",
       city: persona.city,
       state: persona.state,
       postalCode: persona.postalCode,
-      phone: "5031234567",
-      email: "example@atdata.com",
+      phone: "phone" in persona && persona.phone ? persona.phone : "5031234567",
+      email: "email" in persona && persona.email ? persona.email : "example@atdata.com",
       availableSavings: "15000",
     });
     setTestMenuOpen(false);
@@ -295,8 +320,6 @@ export default function AssessPage() {
         minEntry?.report ?? triBureau.experian ?? triBureau.transunion ?? triBureau.equifax ?? creditReport;
       const creditData = extractCreditData(displayReport);
       const greenReadiness = calculateGreenReadiness(creditData);
-      console.log("[GreenPath] Extracted credit data", creditData);
-      console.log("[GreenPath] Green readiness", greenReadiness);
       const investments = getRecommendedInvestments(greenReadiness.tier);
       const primaryReport = displayReport;
 
@@ -315,9 +338,6 @@ export default function AssessPage() {
         });
         if (analysisRes.ok) {
           geminiAnalysis = await analysisRes.json();
-          console.log("[GreenPath] Gemini analysis response", geminiAnalysis);
-        } else {
-          console.warn("[GreenPath] Gemini analysis non-OK", analysisRes.status, await analysisRes.text());
         }
       } catch {
         console.warn("Gemini analysis failed, continuing without AI insights");
@@ -340,7 +360,6 @@ export default function AssessPage() {
         // Original form data for anomaly correction
         originalForm: { ...form },
       };
-      console.log("[GreenPath] Credit report API response", creditReport);
       sessionStorage.setItem("greenpath-results", JSON.stringify(results));
       router.push("/results");
     } catch (err) {
@@ -364,15 +383,25 @@ export default function AssessPage() {
       {/* Header */}
       <nav className="glass-card border-b border-white/30 sticky top-0 z-50">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-grove hover:text-grove-light transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="flex items-center justify-center w-9 h-9 rounded-lg text-grove hover:text-grove-light hover:bg-white/10 transition-colors"
+              aria-label="Back to landing"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </Link>
+            <Link
+              href="/"
+              className="flex items-center gap-2 text-grove hover:text-grove-light transition-colors"
+              aria-label="GreenPath home"
+            >
               <div className="w-7 h-7 rounded-lg bg-grove flex items-center justify-center">
                 <Leaf className="w-4 h-4 text-meadow" />
               </div>
               <span className="font-heading text-xl text-grove">GreenPath</span>
-            </div>
-          </Link>
+            </Link>
+          </div>
           <div className="flex items-center gap-1.5 text-sm text-canopy">
             <Shield className="w-4 h-4" />
             <span>Soft pull only</span>
@@ -386,8 +415,7 @@ export default function AssessPage() {
             Check Your Green Readiness
           </h1>
           <p className="text-soil/70">
-            We&apos;ll verify your identity, pull your tri-bureau credit profile (soft pull — no score impact),
-            run a fraud check, and generate your personalized green investment roadmap.
+            We pull your tri-bureau credit profile (soft pull — no score impact), verify your identity and run fraud checks, then use your real credit picture to show which sustainable financing you qualify for.
           </p>
         </div>
 

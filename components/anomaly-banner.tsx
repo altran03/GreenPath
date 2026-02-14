@@ -122,12 +122,12 @@ export function AnomalyBanner({ anomalyReport, originalForm, onResubmit, resubmi
             </div>
             <div className="text-left">
               <h3 className={`font-heading text-base ${hasCritical ? "text-red-800" : "text-amber-800"}`}>
-                {anomalies.length} Anomal{anomalies.length === 1 ? "y" : "ies"} Detected
+                We found {anomalies.length} discrepanc{anomalies.length === 1 ? "y" : "ies"}
               </h3>
               <p className={`text-xs ${hasCritical ? "text-red-600" : "text-amber-600"}`}>
                 {hasCritical
-                  ? "Critical issues found — please review and correct the flagged information"
-                  : "Minor inconsistencies detected — review recommended"}
+                  ? "Review and correct below so we can show your real credit picture and what you qualify for."
+                  : "Review below; once corrected, you’ll see your verified credit profile and eligible green options."}
               </p>
             </div>
           </div>
@@ -156,8 +156,8 @@ export function AnomalyBanner({ anomalyReport, originalForm, onResubmit, resubmi
             <div className="pt-4 border-t border-dew/30 flex items-center justify-between gap-4">
               <p className="text-xs text-stone">
                 {correctionCount > 0
-                  ? `${correctionCount} field${correctionCount > 1 ? "s" : ""} corrected — resubmit to re-run verification`
-                  : "Edit flagged fields above, then resubmit"}
+                  ? `${correctionCount} field${correctionCount > 1 ? "s" : ""} corrected — resubmit to update your credit picture`
+                  : "Edit flagged fields above, then resubmit to see your verified profile"}
               </p>
               <Button
                 onClick={handleResubmit}
@@ -171,12 +171,12 @@ export function AnomalyBanner({ anomalyReport, originalForm, onResubmit, resubmi
                 {resubmitting ? (
                   <>
                     <RotateCcw className="w-4 h-4 animate-spin" />
-                    Re-verifying...
+                    Updating...
                   </>
                 ) : (
                   <>
                     <RotateCcw className="w-4 h-4" />
-                    Re-verify with Corrections
+                    Re-verify and update report
                   </>
                 )}
               </Button>

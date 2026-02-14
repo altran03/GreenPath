@@ -25,6 +25,15 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const geminiPaused =
+      process.env.GEMINI_PAUSED === "true" || process.env.GEMINI_PAUSED === "1";
+    if (geminiPaused) {
+      return new Response(
+        JSON.stringify({ error: "Gemini is temporarily paused." }),
+        { status: 503, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     if (!process.env.GEMINI_API_KEY) {
       console.error("[chat] GEMINI_API_KEY is not set");
       return new Response(JSON.stringify({ error: "Gemini API key is not configured" }), {

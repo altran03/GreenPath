@@ -268,20 +268,27 @@ export default function ResultsPage() {
       {/* Header */}
       <nav className="glass-card border-b border-white/30 sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link
-            href="/assess"
-            className="flex items-center gap-2 text-grove hover:text-grove-light transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/assess"
+              className="flex items-center justify-center w-9 h-9 rounded-lg text-grove hover:text-grove-light hover:bg-white/10 transition-colors"
+              aria-label="Back to assessment"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </Link>
+            <Link
+              href="/"
+              className="flex items-center gap-2 text-grove hover:text-grove-light transition-colors"
+              aria-label="GreenPath home"
+            >
               <div className="w-7 h-7 rounded-lg bg-grove flex items-center justify-center">
                 <Leaf className="w-4 h-4 text-meadow" />
               </div>
               <span className="font-heading text-xl text-grove">
                 GreenPath
               </span>
-            </div>
-          </Link>
+            </Link>
+          </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" className="rounded-lg border-dew/60 text-grove gap-1.5">
               <Share2 className="w-3.5 h-3.5" />
@@ -299,10 +306,10 @@ export default function ResultsPage() {
         {/* Title */}
         <div className="animate-fade-up text-center">
           <h1 className="font-heading text-3xl sm:text-4xl text-grove mb-2">
-            {data.userName}&apos;s Green Readiness Report
+            {data.userName}&apos;s Credit Health &amp; Green Readiness
           </h1>
           <p className="text-stone text-sm">
-            Generated on {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+            Based on your verified credit profile. Generated on {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
             {" · "}
             <span className="text-canopy font-medium">{crsProductsUsed.length} CRS products used</span>
           </p>
@@ -334,8 +341,13 @@ export default function ResultsPage() {
         {data.bureauScores && data.triBureau && (
           <section className="animate-fade-up delay-150">
             <h2 className="font-heading text-2xl text-grove mb-4">
-              Tri-Bureau Credit Comparison
+              Your Credit Picture
             </h2>
+            {!anomalyReport?.hasAnomalies && (
+              <p className="text-stone text-sm mb-4">
+                Here’s how you look across the bureaus — we use this to show what sustainable financing you qualify for below.
+              </p>
+            )}
             <BureauComparison bureauScores={data.bureauScores} triBureau={data.triBureau} />
           </section>
         )}
@@ -378,8 +390,11 @@ export default function ResultsPage() {
           <h2 className="font-heading text-2xl text-grove mb-2">
             Your Green Action Plan
           </h2>
-          <p className="text-stone text-sm mb-5">
-            {data.investments.length} investments matched to your Tier {data.greenReadiness.tier} profile, sorted by environmental impact.
+          <p className="text-stone text-sm mb-1">
+            Based on your verified profile: {data.investments.length} sustainable financing options you qualify for (Tier {data.greenReadiness.tier}), sorted by environmental impact. Below is your roadmap to unlock more as your credit improves.
+          </p>
+          <p className="text-stone text-xs mb-5">
+            Each card shows estimated cost, annual savings, and tree-equivalent impact. Start with high-impact, low-cost options like transit or community solar if they fit your lifestyle.
           </p>
           <ActionCards investments={data.investments} geminiAnalysis={data.geminiAnalysis} availableSavings={data.availableSavings} />
         </section>

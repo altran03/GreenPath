@@ -66,66 +66,68 @@ export function detectAnomalies(input: DetectionInput): AnomalyReport {
     const flex = input.flexIdResult;
     const raw = flex.raw;
 
-    // Parse the real FlexID structure: data.result.verifiedElementSummary
-    const result = (raw.result || raw) as Record<string, unknown>;
-    const verifiedElements = (result.verifiedElementSummary || flex.verifiedElements || {}) as Record<string, boolean>;
+    // When FlexID overall verification passed (verified === true), do NOT flag per-field
+    // "mismatches". The vendor has accepted the identity; sandbox may not populate
+    // verifiedElementSummary for test personas, which would otherwise false-positive.
+    const flexVerified = flex.verified === true;
 
-    // Only flag specific field-level mismatches (where FlexID explicitly says FALSE)
-    // Address mismatch — FlexID says the address doesn't match their records
-    if (verifiedElements.streetAddress === false || verifiedElements.address === false) {
-      anomalies.push({
-        id: "flexid-address",
-        field: "addressLine1",
-        fieldLabel: "Address",
-        source: "LexisNexis FlexID",
-        severity: "warning",
-        message: "Address does not match records associated with this identity.",
-        userValue: input.formData.addressLine1,
-      });
+    if (!flexVerified) {
+      const result = (raw.result || raw) as Record<string, unknown>;
+      const verifiedElements = (result.verifiedElementSummary || flex.verifiedElements || {}) as Record<string, boolean>;
+
+      // Only flag field-level mismatches when identity was NOT verified overall
+      if (verifiedElements.streetAddress === false || verifiedElements.address === false) {
+        anomalies.push({
+          id: "flexid-address",
+          field: "addressLine1",
+          fieldLabel: "Address",
+          source: "LexisNexis FlexID",
+          severity: "warning",
+          message: "Address does not match records associated with this identity.",
+          userValue: input.formData.addressLine1,
+        });
+      }
+
+      if (verifiedElements.homePhone === false || verifiedElements.phone === false) {
+        anomalies.push({
+          id: "flexid-phone",
+          field: "phone",
+          fieldLabel: "Phone Number",
+          source: "LexisNexis FlexID",
+          severity: "warning",
+          message: "Phone number does not match records for this identity.",
+          userValue: input.formData.phone,
+        });
+      }
+
+      if (verifiedElements.ssn === false) {
+        anomalies.push({
+          id: "flexid-ssn",
+          field: "ssn",
+          fieldLabel: "SSN",
+          source: "LexisNexis FlexID",
+          severity: "critical",
+          message: "SSN does not match records for this identity.",
+          userValue: "••••" + input.formData.ssn.slice(-4),
+        });
+      }
+
+      if (verifiedElements.dateOfBirth === false || verifiedElements.dob === false) {
+        anomalies.push({
+          id: "flexid-dob",
+          field: "birthDate",
+          fieldLabel: "Date of Birth",
+          source: "LexisNexis FlexID",
+          severity: "critical",
+          message: "Date of birth does not match records for this identity.",
+          userValue: input.formData.birthDate,
+        });
+      }
     }
 
-    // Phone mismatch
-    if (verifiedElements.homePhone === false || verifiedElements.phone === false) {
-      anomalies.push({
-        id: "flexid-phone",
-        field: "phone",
-        fieldLabel: "Phone Number",
-        source: "LexisNexis FlexID",
-        severity: "warning",
-        message: "Phone number does not match records for this identity.",
-        userValue: input.formData.phone,
-      });
-    }
-
-    // SSN mismatch
-    if (verifiedElements.ssn === false) {
-      anomalies.push({
-        id: "flexid-ssn",
-        field: "ssn",
-        fieldLabel: "SSN",
-        source: "LexisNexis FlexID",
-        severity: "critical",
-        message: "SSN does not match records for this identity.",
-        userValue: "••••" + input.formData.ssn.slice(-4),
-      });
-    }
-
-    // Date of birth mismatch
-    if (verifiedElements.dateOfBirth === false || verifiedElements.dob === false) {
-      anomalies.push({
-        id: "flexid-dob",
-        field: "birthDate",
-        fieldLabel: "Date of Birth",
-        source: "LexisNexis FlexID",
-        severity: "critical",
-        message: "Date of birth does not match records for this identity.",
-        userValue: input.formData.birthDate,
-      });
-    }
-
-    // Low CVI score ONLY if we actually got a score (not 0/undefined = no data)
+    // Low CVI only when identity was not verified (don't flag when FlexID already said verified)
     const cvi = flex.riskScore;
-    if (cvi !== undefined && cvi > 0 && cvi < 20) {
+    if (!flexVerified && cvi !== undefined && cvi > 0 && cvi < 20) {
       anomalies.push({
         id: "flexid-cvi-low",
         field: "ssn",

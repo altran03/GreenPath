@@ -3,6 +3,9 @@ import { analyzeGreenReadiness } from "@/lib/gemini";
 import type { GreenReadiness } from "@/lib/green-scoring";
 import type { GreenInvestment } from "@/lib/green-investments";
 
+const GEMINI_PAUSED =
+  process.env.GEMINI_PAUSED === "true" || process.env.GEMINI_PAUSED === "1";
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as {
@@ -18,19 +21,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log("[green-analysis] Request body", {
-      greenReadiness: body.greenReadiness,
-      recommendedInvestments: body.recommendedInvestments,
-      bureauScores: body.bureauScores,
-    });
+    if (GEMINI_PAUSED) {
+      return NextResponse.json({
+        summary: "Analysis is temporarily paused.",
+        investmentInsights: [],
+        creditTips: [],
+        totalImpactStatement: "",
+      });
+    }
 
+    console.log("[green-analysis] Calling Gemini for analysis");
     const analysis = await analyzeGreenReadiness(
       body.greenReadiness,
       body.recommendedInvestments,
       body.bureauScores ?? null
     );
+    console.log("[green-analysis] Gemini analysis complete");
 
-    console.log("[green-analysis] Response", analysis);
     return NextResponse.json(analysis);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Gemini analysis failed";
