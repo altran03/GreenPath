@@ -106,12 +106,16 @@ interface FormData {
   city: string;
   state: string;
   postalCode: string;
+  phone: string;
+  email: string;
   availableSavings: string;
 }
 
 const LOADING_STEPS = [
   "Authenticating with CRS...",
-  "Pulling credit report (soft pull)...",
+  "Verifying identity (FlexID)...",
+  "Pulling tri-bureau credit reports...",
+  "Running fraud analysis...",
   "Calculating green readiness...",
   "Generating AI insights with Gemini...",
 ];
@@ -129,6 +133,8 @@ export default function AssessPage() {
     city: "",
     state: "",
     postalCode: "",
+    phone: "",
+    email: "",
     availableSavings: "",
   });
   const [loading, setLoading] = useState(false);
@@ -148,6 +154,8 @@ export default function AssessPage() {
       city: persona.city,
       state: persona.state,
       postalCode: persona.postalCode,
+      phone: "5031234567",
+      email: "example@atdata.com",
       availableSavings: "15000",
     });
     setTestMenuOpen(false);
@@ -166,33 +174,134 @@ export default function AssessPage() {
     try {
       // Step 1: Authenticate
       setLoadingStep(0);
-      const authRes = await fetch("/api/auth", { method: "POST" });
+      let authRes: Response;
+      try {
+        authRes = await fetch("/api/auth", { method: "POST" });
+      } catch (netErr) {
+        throw new Error(
+          "Cannot reach the server. Check that the app is running (e.g. npm run dev or Docker) and that you're using the correct URL."
+        );
+      }
       if (!authRes.ok) {
-        const data = await authRes.json();
+        let data: { error?: string } = {};
+        try {
+          data = await authRes.json();
+        } catch {
+          /* response may not be JSON */
+        }
         throw new Error(data.error || "Authentication failed");
       }
 
-      // Step 2: Pull credit report
+      // Step 2: FlexID Identity Verification (non-blocking)
       setLoadingStep(1);
-      const reportRes = await fetch("/api/credit-report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
+      let flexIdResult = null;
+      try {
+        const flexRes = await fetch("/api/flex-id", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            firstName: form.firstName,
+            lastName: form.lastName,
+            ssn: form.ssn,
+            dateOfBirth: form.birthDate,
+            streetAddress: form.addressLine1,
+            city: form.city,
+            state: form.state,
+            zipCode: form.postalCode,
+            homePhone: form.phone,
+          }),
+        });
+        if (flexRes.ok) {
+          flexIdResult = await flexRes.json();
+        }
+      } catch {
+        console.warn("FlexID verification failed, continuing...");
+      }
+
+      // Step 3: Tri-Bureau Credit Reports + Step 4: Fraud Finder (in parallel)
+      setLoadingStep(2);
+      const [reportRes, fraudRes] = await Promise.all([
+        fetch("/api/credit-report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(form),
+        }),
+        // Start fraud finder at the same time
+        (async () => {
+          setLoadingStep(3); // Show fraud step while running in parallel
+          try {
+            const res = await fetch("/api/fraud-finder", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                firstName: form.firstName,
+                lastName: form.lastName,
+                email: form.email || undefined,
+                phoneNumber: form.phone || undefined,
+                addressLine1: form.addressLine1,
+                city: form.city,
+                state: form.state,
+                postalCode: form.postalCode,
+              }),
+            });
+            if (res.ok) return res.json();
+            return null;
+          } catch {
+            return null;
+          }
+        })(),
+      ]);
+
       if (!reportRes.ok) {
-        const data = await reportRes.json();
+        let data: { error?: string } = {};
+        try {
+          data = await reportRes.json();
+        } catch {
+          /* response may not be JSON */
+        }
         throw new Error(data.error || "Credit report pull failed");
       }
-      const creditReport = await reportRes.json();
+      let creditReport: Record<string, unknown>;
+      try {
+        creditReport = await reportRes.json();
+      } catch {
+        throw new Error("Invalid response from credit report service.");
+      }
 
-      // Step 3: Calculate green readiness
-      setLoadingStep(2);
-      const creditData = extractCreditData(creditReport);
+      // Extract tri-bureau data
+      type TriBureau = { experian: Record<string, unknown> | null; transunion: Record<string, unknown> | null; equifax: Record<string, unknown> | null };
+      const triBureau: TriBureau = (creditReport._triBureau as TriBureau | undefined) ?? {
+        experian: creditReport,
+        transunion: null,
+        equifax: null,
+      };
+
+      // Step 5: Calculate green readiness (use the bureau with the lowest score for a consistent snapshot)
+      setLoadingStep(4);
+      const bureauScores: Record<string, number | null> = {
+        experian: extractScore(triBureau.experian),
+        transunion: extractScore(triBureau.transunion),
+        equifax: extractScore(triBureau.equifax),
+      };
+      const bureaus: (keyof TriBureau)[] = ["experian", "transunion", "equifax"];
+      const scoresWithBureaus = bureaus
+        .map((b) => ({ bureau: b, score: bureauScores[b], report: triBureau[b] }))
+        .filter((x) => x.score != null && x.score > 0 && x.report);
+      const minEntry =
+        scoresWithBureaus.length > 0
+          ? scoresWithBureaus.reduce((a, b) => (a.score! <= b.score! ? a : b))
+          : null;
+      const displayReport =
+        minEntry?.report ?? triBureau.experian ?? triBureau.transunion ?? triBureau.equifax ?? creditReport;
+      const creditData = extractCreditData(displayReport);
       const greenReadiness = calculateGreenReadiness(creditData);
+      console.log("[GreenPath] Extracted credit data", creditData);
+      console.log("[GreenPath] Green readiness", greenReadiness);
       const investments = getRecommendedInvestments(greenReadiness.tier);
+      const primaryReport = displayReport;
 
-      // Step 4: Get Gemini analysis
-      setLoadingStep(3);
+      // Step 6: Get Gemini analysis
+      setLoadingStep(5);
       let geminiAnalysis = null;
       try {
         const analysisRes = await fetch("/api/green-analysis", {
@@ -201,13 +310,16 @@ export default function AssessPage() {
           body: JSON.stringify({
             greenReadiness,
             recommendedInvestments: investments,
+            bureauScores,
           }),
         });
         if (analysisRes.ok) {
           geminiAnalysis = await analysisRes.json();
+          console.log("[GreenPath] Gemini analysis response", geminiAnalysis);
+        } else {
+          console.warn("[GreenPath] Gemini analysis non-OK", analysisRes.status, await analysisRes.text());
         }
       } catch {
-        // Gemini failure is non-fatal
         console.warn("Gemini analysis failed, continuing without AI insights");
       }
 
@@ -215,16 +327,34 @@ export default function AssessPage() {
       const savings = form.availableSavings ? parseFloat(form.availableSavings) : null;
       const results = {
         userName: `${form.firstName} ${form.lastName}`,
-        creditReport,
+        creditReport: primaryReport,
         greenReadiness,
         investments,
         geminiAnalysis,
         availableSavings: savings,
+        // New CRS data
+        bureauScores,
+        triBureau,
+        flexIdResult,
+        fraudResult: fraudRes,
+        // Original form data for anomaly correction
+        originalForm: { ...form },
       };
+      console.log("[GreenPath] Credit report API response", creditReport);
       sessionStorage.setItem("greenpath-results", JSON.stringify(results));
       router.push("/results");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      const message = err instanceof Error ? err.message : "Something went wrong";
+      const isNetworkFailure =
+        message === "Failed to fetch" ||
+        message.includes("Load failed") ||
+        message.includes("NetworkError") ||
+        message.includes("Cannot reach the server");
+      setError(
+        isNetworkFailure
+          ? "Cannot reach the server. Make sure the app is running (npm run dev or Docker) and you're not blocking the request. If the app is running, check .env.local has CRS_USERNAME and CRS_PASSWORD set."
+          : message
+      );
       setLoading(false);
     }
   }
@@ -256,8 +386,8 @@ export default function AssessPage() {
             Check Your Green Readiness
           </h1>
           <p className="text-soil/70">
-            We&apos;ll pull your credit profile (soft pull — no score impact) and
-            generate your personalized green investment roadmap.
+            We&apos;ll verify your identity, pull your tri-bureau credit profile (soft pull — no score impact),
+            run a fraud check, and generate your personalized green investment roadmap.
           </p>
         </div>
 
@@ -367,6 +497,36 @@ export default function AssessPage() {
                 </div>
               </div>
 
+              {/* Phone + Email (for FlexID + Fraud Finder) */}
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="phone" className="text-grove font-medium text-sm mb-1.5 block">
+                    Phone (for verification)
+                  </Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    value={form.phone}
+                    onChange={(e) => updateField("phone", e.target.value)}
+                    className="rounded-xl border-dew/60 focus:border-canopy focus:ring-canopy/20"
+                    placeholder="5031234567"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="email" className="text-grove font-medium text-sm mb-1.5 block">
+                    Email (for fraud check)
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => updateField("email", e.target.value)}
+                    className="rounded-xl border-dew/60 focus:border-canopy focus:ring-canopy/20"
+                    placeholder="example@atdata.com"
+                  />
+                </div>
+              </div>
+
               {/* Address */}
               <div>
                 <Label htmlFor="addressLine1" className="text-grove font-medium text-sm mb-1.5 block">
@@ -468,9 +628,10 @@ export default function AssessPage() {
                 <Shield className="w-5 h-5 text-canopy mt-0.5 shrink-0" />
                 <p className="text-sm text-grove-light leading-relaxed">
                   This is a <strong>soft pull</strong> and will{" "}
-                  <strong>NOT affect your credit score</strong>. We use the CRS
-                  Experian Prequal endpoint which performs a promotional inquiry
-                  only.
+                  <strong>NOT affect your credit score</strong>. We pull from
+                  all 3 bureaus (Experian, TransUnion, Equifax) for a complete
+                  picture. Identity is verified via LexisNexis FlexID and fraud
+                  signals are checked via CRS Fraud Finder.
                 </p>
               </div>
 
@@ -521,4 +682,16 @@ export default function AssessPage() {
       </main>
     </div>
   );
+}
+
+/** Helper to extract score from a CRS response (supports scoreValue or value per bureau) */
+function extractScore(report: Record<string, unknown> | null): number | null {
+  if (!report) return null;
+  const scores = report.scores as Array<Record<string, unknown>> | undefined;
+  if (scores && scores.length > 0) {
+    const raw = scores[0].scoreValue ?? scores[0].value ?? "0";
+    const val = parseInt(String(raw), 10);
+    return val > 0 ? val : null;
+  }
+  return null;
 }

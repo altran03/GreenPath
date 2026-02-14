@@ -31,6 +31,8 @@ const ANALYSIS_SYSTEM_PROMPT = `You are GreenPath AI, a friendly financial and e
 3. If their tier is C or D, provide 2-3 specific, actionable credit improvement tips that would help them unlock higher-tier green investments. Be specific with numbers (e.g., "Paying down $X of your revolving balance would drop your utilization to Y%").
 4. Calculate and state the total potential environmental impact if they adopted all recommended actions.
 
+IMPORTANT — Tri-bureau data: When "bureauScores" is provided (Experian, TransUnion, Equifax), you MUST take all three bureaus into account. Mention their range of scores (e.g. "Your scores range from 680 to 720 across bureaus"). If there is a significant spread (e.g. 30+ points), note that lenders may pull from any bureau and suggest they shop around for the best rate. If only one bureau has a score, base your summary on that; if two or three have scores, reference the picture across all of them — don't speak as if only one bureau exists.
+
 Keep the tone optimistic, informative, and actionable. Use plain language — no jargon. Format your response as JSON with this structure:
 {
   "summary": "string",
@@ -48,7 +50,8 @@ export interface GeminiAnalysis {
 
 export async function analyzeGreenReadiness(
   greenReadiness: GreenReadiness,
-  recommendedInvestments: GreenInvestment[]
+  recommendedInvestments: GreenInvestment[],
+  bureauScores?: Record<string, number | null> | null
 ): Promise<GeminiAnalysis> {
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash",
@@ -57,32 +60,44 @@ export async function analyzeGreenReadiness(
     },
   });
 
-  const userMessage = JSON.stringify(
-    {
-      greenReadiness: {
-        tier: greenReadiness.tier,
-        score: greenReadiness.score,
-        creditScore: greenReadiness.creditScore,
-        utilization: `${(greenReadiness.utilization * 100).toFixed(1)}%`,
-        totalDebt: greenReadiness.totalDebt,
-        totalCreditLimit: greenReadiness.totalCreditLimit,
-        derogatoryCount: greenReadiness.derogatoryCount,
-        tradelineCount: greenReadiness.tradelineCount,
-        factors: greenReadiness.factors,
-      },
-      recommendedInvestments: recommendedInvestments.map((inv) => ({
-        id: inv.id,
-        name: inv.name,
-        category: inv.category,
-        estimatedCost: inv.estimatedCost,
-        annualSavings: inv.annualSavings,
-        annualCO2ReductionLbs: inv.annualCO2ReductionLbs,
-        description: inv.description,
-      })),
+  const payload: Record<string, unknown> = {
+    greenReadiness: {
+      tier: greenReadiness.tier,
+      score: greenReadiness.score,
+      creditScore: greenReadiness.creditScore,
+      utilization: `${(greenReadiness.utilization * 100).toFixed(1)}%`,
+      totalDebt: greenReadiness.totalDebt,
+      totalCreditLimit: greenReadiness.totalCreditLimit,
+      derogatoryCount: greenReadiness.derogatoryCount,
+      tradelineCount: greenReadiness.tradelineCount,
+      factors: greenReadiness.factors,
     },
-    null,
-    2
-  );
+    recommendedInvestments: recommendedInvestments.map((inv) => ({
+      id: inv.id,
+      name: inv.name,
+      category: inv.category,
+      estimatedCost: inv.estimatedCost,
+      annualSavings: inv.annualSavings,
+      annualCO2ReductionLbs: inv.annualCO2ReductionLbs,
+      description: inv.description,
+    })),
+  };
+
+  if (bureauScores && Object.keys(bureauScores).length > 0) {
+    const scores = Object.entries(bureauScores).filter(([, v]) => v != null) as [string, number][];
+    if (scores.length > 0) {
+      payload.bureauScores = bureauScores;
+      const values = scores.map(([, v]) => v);
+      payload.bureauSummary = {
+        experian: bureauScores.experian ?? "Not reported",
+        transunion: bureauScores.transunion ?? "Not reported",
+        equifax: bureauScores.equifax ?? "Not reported",
+        scoreSpread: values.length >= 2 ? Math.max(...values) - Math.min(...values) : 0,
+      };
+    }
+  }
+
+  const userMessage = JSON.stringify(payload, null, 2);
 
   const result = await withRetry(() =>
     model.generateContent([
@@ -107,7 +122,10 @@ export async function analyzeGreenReadiness(
 export function createChatSystemPrompt(
   greenReadiness: GreenReadiness,
   investments: GreenInvestment[],
-  availableSavings?: number | null
+  availableSavings?: number | null,
+  bureauScores?: Record<string, number | null> | null,
+  flexIdVerified?: boolean | null,
+  fraudRiskLevel?: string | null
 ): string {
   const tierRates: Record<string, string> = {
     A: "5-6% APR (excellent rates)",
@@ -137,6 +155,21 @@ THIS USER'S FULL PROFILE:
 - Derogatory Marks: ${greenReadiness.derogatoryCount}
 - Estimated Loan Rate for Their Tier: ${tierRates[greenReadiness.tier]}
 - Available Savings (self-reported): ${availableSavings != null ? `$${availableSavings.toLocaleString()}` : "Not provided"}
+${bureauScores ? `
+TRI-BUREAU SCORES (all VantageScore 4.0):
+- Experian: ${bureauScores.experian ?? "N/A"}
+- TransUnion: ${bureauScores.transunion ?? "N/A"}
+- Equifax: ${bureauScores.equifax ?? "N/A"}
+${(() => {
+  const scores = Object.values(bureauScores).filter((s): s is number => s != null);
+  if (scores.length >= 2) {
+    const spread = Math.max(...scores) - Math.min(...scores);
+    return `- Score Spread: ${spread} points ${spread >= 30 ? "(significant — advise shopping around)" : "(consistent)"}`;
+  }
+  return "";
+})()}` : ""}
+- Identity Verified (FlexID): ${flexIdVerified === true ? "Yes" : flexIdVerified === false ? "Could not verify" : "Not checked"}
+- Fraud Risk Level: ${fraudRiskLevel || "Not checked"}
 
 THEIR RECOMMENDED GREEN INVESTMENTS:
 ${investmentDetails}

@@ -20,15 +20,17 @@ export function CreditSummary({ data }: CreditSummaryProps) {
     },
     {
       label: "Credit Utilization",
-      value: `${(data.utilization * 100).toFixed(0)}%`,
-      sub: data.utilization < 0.3 ? "Healthy range" : "Above recommended",
+      value: data.utilization >= 1 ? ">100%" : `${(data.utilization * 100).toFixed(0)}%`,
+      sub: data.totalCreditLimit > 0
+        ? `Revolving: ${formatCurrency(Math.round(data.utilization * data.totalCreditLimit))} of ${formatCurrency(data.totalCreditLimit)} · ${data.utilization < 0.3 ? "Healthy" : data.utilization < 0.5 ? "Moderate" : "Above recommended"}`
+        : (data.utilization < 0.3 ? "Healthy range" : data.utilization < 0.5 ? "Moderate" : "Above recommended"),
       icon: Percent,
       color: data.utilization < 0.3 ? "text-canopy" : data.utilization < 0.5 ? "text-sunbeam" : "text-red-400",
     },
     {
       label: "Total Debt",
       value: formatCurrency(data.totalDebt),
-      sub: `of ${formatCurrency(data.totalCreditLimit)} limit`,
+      sub: "Across all account types",
       icon: DollarSign,
       color: "text-grove",
     },

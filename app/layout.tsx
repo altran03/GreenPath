@@ -1,20 +1,9 @@
 import type { Metadata } from "next";
-import { Instrument_Serif, DM_Sans } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
-const instrumentSerif = Instrument_Serif({
-  variable: "--font-heading",
-  subsets: ["latin"],
-  weight: "400",
-});
-
-const dmSans = DM_Sans({
-  variable: "--font-body",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-});
-
+// Use CSS variables for fonts so build works offline (Docker/sandbox). Same visual stack:
+// heading ≈ Instrument Serif, body ≈ DM Sans. Defined in globals.css.
 export const metadata: Metadata = {
   title: "GreenPath — Your Personalized Green Finance Roadmap",
   description:
@@ -28,9 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${instrumentSerif.variable} ${dmSans.variable} font-sans antialiased`}
-      >
+      <body className="font-sans antialiased">
         <TooltipProvider>{children}</TooltipProvider>
       </body>
     </html>

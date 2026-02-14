@@ -11,6 +11,9 @@ export async function POST(request: NextRequest) {
         greenReadiness: GreenReadiness;
         investments: GreenInvestment[];
         availableSavings?: number | null;
+        bureauScores?: Record<string, number | null> | null;
+        flexIdVerified?: boolean | null;
+        fraudRiskLevel?: string | null;
       };
     };
 
@@ -33,7 +36,10 @@ export async function POST(request: NextRequest) {
     const systemPrompt = createChatSystemPrompt(
       body.context.greenReadiness,
       body.context.investments,
-      body.context.availableSavings
+      body.context.availableSavings,
+      body.context.bureauScores,
+      body.context.flexIdVerified,
+      body.context.fraudRiskLevel
     );
 
     console.log("[chat] Starting stream for", body.messages.length, "messages");

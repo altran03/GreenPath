@@ -8,6 +8,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json() as {
       greenReadiness: GreenReadiness;
       recommendedInvestments: GreenInvestment[];
+      bureauScores?: Record<string, number | null> | null;
     };
 
     if (!body.greenReadiness || !body.recommendedInvestments) {
@@ -17,11 +18,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log("[green-analysis] Request body", {
+      greenReadiness: body.greenReadiness,
+      recommendedInvestments: body.recommendedInvestments,
+      bureauScores: body.bureauScores,
+    });
+
     const analysis = await analyzeGreenReadiness(
       body.greenReadiness,
-      body.recommendedInvestments
+      body.recommendedInvestments,
+      body.bureauScores ?? null
     );
 
+    console.log("[green-analysis] Response", analysis);
     return NextResponse.json(analysis);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Gemini analysis failed";

@@ -199,7 +199,128 @@ export function calculateGreenReadiness(creditData: CreditData): GreenReadiness 
   };
 }
 
-// Extract credit data from a CRS standard format response
+function getNum(obj: Record<string, unknown> | undefined, ...keys: string[]): number {
+  if (!obj) return 0;
+  for (const k of keys) {
+    const v = obj[k];
+    if (v !== undefined && v !== null) {
+      const n = parseFloat(String(v));
+      if (!Number.isNaN(n)) return n;
+    }
+  }
+  return 0;
+}
+
+function getTradeSummary(report: Record<string, unknown>): Record<string, unknown> | null {
+  const getFromSummaries = (s: Record<string, unknown> | undefined) =>
+    (s?.tradeSummary ?? s?.TradeSummary) as Record<string, unknown> | undefined;
+
+  let summaries = report.summaries as Record<string, unknown> | Array<Record<string, unknown>> | undefined;
+  if (Array.isArray(summaries) && summaries.length > 0) summaries = summaries[0] as Record<string, unknown>;
+  let tradeSummary = summaries && typeof summaries === "object" ? getFromSummaries(summaries as Record<string, unknown>) : undefined;
+  if (tradeSummary) return tradeSummary;
+
+  const creditFiles = report.creditFiles as Array<Record<string, unknown>> | undefined;
+  if (Array.isArray(creditFiles) && creditFiles[0]) {
+    let cfSummaries = creditFiles[0].summaries as Record<string, unknown> | Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(cfSummaries) && cfSummaries.length > 0) cfSummaries = cfSummaries[0] as Record<string, unknown>;
+    tradeSummary = cfSummaries && typeof cfSummaries === "object" ? getFromSummaries(cfSummaries as Record<string, unknown>) : undefined;
+    if (tradeSummary) return tradeSummary;
+  }
+  return null;
+}
+
+/**
+ * Utilization & debt from CRS tradeSummary (works for any person).
+ * Reference: natalie_experian.json, natalie_transunion.json, natalie_equifax.json
+ *
+ * Path: report.summaries.tradeSummary (or creditFiles[0].summaries.tradeSummary)
+ *
+ * Total debt:     tradeSummary.balanceTotal (string, e.g. "208336")
+ * Utilization:    tradeSummary.revolvingCreditUtilization (0–100, e.g. "0" or "3")
+ * Revolving bal:  tradeSummary.revolvingBalanceTotal
+ * Revolving limit: tradeSummary.applicableRevolvingHighCreditTotal (prefer) | revolvingHighCreditTotal
+ *
+ * Key variants for all bureaus: camelCase above; also BalanceTotal, RevolvingBalanceTotal, etc.
+ * Tradeline: currentBalanceAmount, creditLimitAmount, highBalanceAmount (Equifax); accountType "Revolving"
+ */
+function getRevolvingFromReport(report: Record<string, unknown>): {
+  utilization: number;
+  revolvingBalanceTotal: number;
+  revolvingLimitTotal: number;
+} {
+  const tradeSummary = getTradeSummary(report);
+  if (!tradeSummary) return { utilization: 0, revolvingBalanceTotal: 0, revolvingLimitTotal: 0 };
+
+  const balance = getNum(tradeSummary, "revolvingBalanceTotal", "RevolvingBalanceTotal", "revolving_balance_total");
+  const applicableLimit = getNum(
+    tradeSummary,
+    "applicableRevolvingHighCreditTotal",
+    "ApplicableRevolvingHighCreditTotal",
+    "applicable_revolving_high_credit_total"
+  );
+  const limit =
+    applicableLimit > 0
+      ? applicableLimit
+      : getNum(tradeSummary, "revolvingHighCreditTotal", "RevolvingHighCreditTotal", "revolving_high_credit_total");
+
+  let utilization = 0;
+  const rawUtil =
+    tradeSummary.revolvingCreditUtilization ??
+    tradeSummary.RevolvingCreditUtilization ??
+    tradeSummary.revolving_credit_utilization;
+  if (rawUtil !== undefined && rawUtil !== null) {
+    const s = String(rawUtil).trim();
+    if (s.startsWith(">")) {
+      utilization = limit > 0 ? balance / limit : 1;
+    } else {
+      const n = parseFloat(s);
+      if (!Number.isNaN(n)) utilization = n / 100;
+    }
+  } else if (limit > 0) {
+    utilization = balance / limit;
+  }
+
+  return { utilization: Math.min(utilization, 2), revolvingBalanceTotal: balance, revolvingLimitTotal: limit };
+}
+
+function getTradelineBalance(tl: Record<string, unknown>): number {
+  return getNum(
+    tl as Record<string, unknown>,
+    "currentBalanceAmount",
+    "currentBalance",
+    "balanceAmount",
+    "balance",
+    "CurrentBalanceAmount",
+    "BalanceAmount"
+  );
+}
+
+function getTradelineLimit(tl: Record<string, unknown>): number {
+  return getNum(
+    tl as Record<string, unknown>,
+    "creditLimitAmount",
+    "creditLimit",
+    "highCreditAmount",
+    "highCredit",
+    "highBalanceAmount",
+    "CreditLimitAmount",
+    "HighCreditAmount",
+    "HighBalanceAmount"
+  );
+}
+
+function isRevolvingTradeline(tl: Record<string, unknown>): boolean {
+  const accountType = String(tl.accountType ?? tl.type ?? "").toLowerCase();
+  return (
+    accountType.includes("revolv") ||
+    accountType.includes("credit") ||
+    accountType === "revolving" ||
+    accountType === "credit card"
+  );
+}
+
+// Extract credit data from a CRS standard format response (aligns with bureau cards and Postman/CRS JSON)
 export function extractCreditData(crsResponse: Record<string, unknown>): CreditData {
   let creditScore = 0;
   let totalDebt = 0;
@@ -207,41 +328,71 @@ export function extractCreditData(crsResponse: Record<string, unknown>): CreditD
   let tradelineCount = 0;
   let derogatoryCount = 0;
 
-  // Extract score
+  // Extract score (support scoreValue, value)
   const scores = crsResponse.scores as Array<Record<string, unknown>> | undefined;
   if (scores && scores.length > 0) {
-    creditScore = parseInt(String(scores[0].scoreValue || "0"), 10);
+    creditScore = parseInt(String(scores[0].scoreValue ?? scores[0].value ?? "0"), 10);
   }
 
-  // Extract tradelines
-  const tradelines = crsResponse.tradelines as Array<Record<string, unknown>> | undefined;
-  if (tradelines) {
+  const tradeSummary = getTradeSummary(crsResponse);
+  const fromSummary = getRevolvingFromReport(crsResponse);
+
+  // Total Debt = all debt (CRS tradeSummary.balanceTotal or sum of all tradelines)
+  totalDebt = getNum(
+    tradeSummary ?? undefined,
+    "balanceTotal",
+    "BalanceTotal",
+    "balance_total"
+  );
+
+  // Extract tradelines (top-level or under creditFiles[0] per CRS)
+  const rawTradelines = crsResponse.tradelines as Array<Record<string, unknown>> | undefined;
+  const tradelines = Array.isArray(rawTradelines)
+    ? rawTradelines
+    : ((crsResponse.creditFiles as Array<Record<string, unknown>>)?.[0]?.tradelines as Array<Record<string, unknown>> | undefined) ?? [];
+
+  if (tradelines.length > 0) {
     tradelineCount = tradelines.length;
-    for (const tl of tradelines) {
-      const balance = parseFloat(String(tl.currentBalanceAmount || "0"));
-      totalDebt += balance;
-      const accountType = String(tl.accountType || "").toLowerCase();
-      if (accountType.includes("revolv") || accountType.includes("credit")) {
-        const limit = parseFloat(String(tl.creditLimitAmount || "0"));
-        totalCreditLimit += limit;
+    if (totalDebt === 0) {
+      for (const tl of tradelines) {
+        totalDebt += getTradelineBalance(tl);
+      }
+    }
+    // Revolving limit: from summary first, else sum revolving tradelines
+    totalCreditLimit = fromSummary.revolvingLimitTotal;
+    if (totalCreditLimit === 0) {
+      for (const tl of tradelines) {
+        if (isRevolvingTradeline(tl)) totalCreditLimit += getTradelineLimit(tl);
       }
     }
   }
 
-  // Extract derogatory count
-  const summaries = crsResponse.summaries as Record<string, unknown> | undefined;
-  if (summaries) {
-    const derogSummary = summaries.derogatorySummary as Record<string, unknown> | undefined;
-    if (derogSummary) {
-      derogatoryCount = parseInt(String(derogSummary.collectionsCount || "0"), 10);
-    }
+  // Utilization = revolving only (summary or revolving balance/limit from tradelines)
+  let utilization = fromSummary.utilization;
+  if (utilization <= 0 && totalCreditLimit > 0) {
+    const revBalance = fromSummary.revolvingBalanceTotal > 0
+      ? fromSummary.revolvingBalanceTotal
+      : tradelines.reduce((sum, tl) => sum + (isRevolvingTradeline(tl) ? getTradelineBalance(tl) : 0), 0);
+    utilization = Math.min(revBalance / totalCreditLimit, 2);
   }
 
-  const utilization = totalCreditLimit > 0 ? totalDebt / totalCreditLimit : 0;
+  // Derogatory: summaries.derogatorySummary (top-level or under creditFiles[0].summaries)
+  let summariesObj = crsResponse.summaries as Record<string, unknown> | undefined;
+  if (!summariesObj) {
+    const cfSummaries = (crsResponse.creditFiles as Array<Record<string, unknown>>)?.[0]?.summaries;
+    summariesObj = Array.isArray(cfSummaries) ? (cfSummaries[0] as Record<string, unknown>) : (cfSummaries as Record<string, unknown>);
+  }
+  const derogSummary = summariesObj?.derogatorySummary as Record<string, unknown> | undefined;
+  if (derogSummary) {
+    derogatoryCount = parseInt(
+      String(derogSummary.collectionsCount ?? derogSummary.CollectionsCount ?? "0"),
+      10
+    );
+  }
 
   return {
     creditScore,
-    utilization: Math.min(utilization, 1),
+    utilization: Math.min(utilization, 2),
     totalDebt,
     totalCreditLimit,
     derogatoryCount,

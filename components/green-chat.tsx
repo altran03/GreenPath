@@ -18,6 +18,9 @@ interface GreenChatProps {
   greenReadiness: GreenReadiness;
   investments: GreenInvestment[];
   availableSavings?: number | null;
+  bureauScores?: Record<string, number | null> | null;
+  flexIdVerified?: boolean | null;
+  fraudRiskLevel?: string | null;
 }
 
 const SUGGESTIONS = [
@@ -27,7 +30,7 @@ const SUGGESTIONS = [
   "What are the best green investments for beginners?",
 ];
 
-export function GreenChat({ greenReadiness, investments, availableSavings }: GreenChatProps) {
+export function GreenChat({ greenReadiness, investments, availableSavings, bureauScores, flexIdVerified, fraudRiskLevel }: GreenChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -57,7 +60,7 @@ export function GreenChat({ greenReadiness, investments, availableSavings }: Gre
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: newMessages,
-          context: { greenReadiness, investments, availableSavings },
+          context: { greenReadiness, investments, availableSavings, bureauScores, flexIdVerified, fraudRiskLevel },
         }),
       });
 
