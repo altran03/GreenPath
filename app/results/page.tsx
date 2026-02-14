@@ -3,9 +3,18 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Leaf, ArrowLeft, Download, Share2 } from "lucide-react";
+import {
+  Leaf,
+  ArrowLeft,
+  Download,
+  Share2,
+  Shield,
+  GraduationCap,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { GreenScoreGauge } from "@/components/green-score-gauge";
 import { CreditSummary } from "@/components/credit-summary";
 import { GeminiInsights } from "@/components/gemini-insights";
@@ -18,6 +27,8 @@ import { VerificationBadges } from "@/components/verification-badges";
 import { AnomalyBanner } from "@/components/anomaly-banner";
 import { DataQualityReport } from "@/components/data-quality-report";
 import { DuplicateAccounts } from "@/components/duplicate-accounts";
+import { EducationModules } from "@/components/education-modules";
+import { ChatFAB } from "@/components/chat-fab";
 import { detectAnomalies, type AnomalyReport } from "@/lib/anomaly-detection";
 import { runDataQualityReport, type DataQualityReport as DataQualityReportType } from "@/lib/data-quality";
 import { detectDuplicateTradelines, type DuplicateGroup } from "@/lib/duplicate-tradelines";
@@ -40,12 +51,10 @@ interface ResultsData {
   investments: GreenInvestment[];
   geminiAnalysis: GeminiAnalysis | null;
   availableSavings: number | null;
-  // CRS data
   bureauScores?: Record<string, number | null>;
   triBureau?: Record<string, Record<string, unknown> | null>;
   flexIdResult?: { verified: boolean; notRegistered?: boolean; riskScore?: number; summary: string; raw?: Record<string, unknown> } | null;
   fraudResult?: { riskLevel: "low" | "medium" | "high" | "unknown"; signals: string[]; summary: string; raw?: Record<string, unknown> } | null;
-  // Original form for anomaly correction
   originalForm?: Record<string, string>;
 }
 
@@ -57,6 +66,9 @@ export default function ResultsPage() {
   const [dataQualityReport, setDataQualityReport] = useState<DataQualityReportType | null>(null);
   const [duplicateTradelines, setDuplicateTradelines] = useState<DuplicateGroup[]>([]);
   const [resubmitting, setResubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState("profile");
+  const [showAllActions, setShowAllActions] = useState(false);
+  const [showImpact, setShowImpact] = useState(false);
 
   useEffect(() => {
     const stored = sessionStorage.getItem("greenpath-results");
@@ -94,7 +106,7 @@ export default function ResultsPage() {
         });
         setAnomalyReport(report);
       }
-      // Data quality and duplicate tradelines (run on stored CRS payloads)
+      // Data quality and duplicate tradelines
       setDataQualityReport(
         runDataQualityReport({
           triBureau: parsed.triBureau,
@@ -115,7 +127,7 @@ export default function ResultsPage() {
     setResubmitting(true);
 
     try {
-      // Demo persona: use corrected mocks directly so discrepancy always clears (no API dependency)
+      // Demo persona: use corrected mocks directly
       if (isDemoPersona(correctedForm)) {
         const creditReportPayload = getDemoCreditReportResponse() as Record<string, unknown>;
         const triBureau = creditReportPayload._triBureau as Record<string, Record<string, unknown> | null> | undefined;
@@ -128,11 +140,7 @@ export default function ResultsPage() {
         const creditData = extractCreditData(displayReport);
         const greenReadiness = calculateGreenReadiness(creditData);
         const investments = getRecommendedInvestments(greenReadiness.tier);
-        const bureauScores = {
-          experian: 680,
-          transunion: 680,
-          equifax: 680,
-        };
+        const bureauScores = { experian: 680, transunion: 680, equifax: 680 };
         const flexIdResult = getDemoFlexIdCorrected();
         const fraudRes = getDemoFraudResult();
         const savings = correctedForm.availableSavings ? parseFloat(correctedForm.availableSavings) : null;
@@ -297,11 +305,9 @@ export default function ResultsPage() {
         originalForm: correctedForm,
       };
 
-      // Update session + state
       sessionStorage.setItem("greenpath-results", JSON.stringify(newResults));
       setData(newResults);
 
-      // Re-run anomaly detection
       const report = detectAnomalies({
         formData: {
           firstName: correctedForm.firstName || "",
@@ -400,8 +406,8 @@ export default function ResultsPage() {
         </div>
       </nav>
 
-      <main className="max-w-5xl mx-auto px-6 py-10 space-y-10">
-        {/* Title */}
+      {/* Title */}
+      <div className="max-w-5xl mx-auto px-6 pt-8 pb-2">
         <div className="animate-fade-up text-center">
           <h1 className="font-heading text-3xl sm:text-4xl text-grove mb-2">
             {data.userName}&apos;s Credit Health &amp; Green Readiness
@@ -412,135 +418,212 @@ export default function ResultsPage() {
             <span className="text-canopy font-medium">{crsProductsUsed.length} CRS products used</span>
           </p>
         </div>
+      </div>
 
-        {/* Anomaly Banner — top of dashboard when anomalies exist */}
-        {anomalyReport?.hasAnomalies && data.originalForm && (
-          <section className="animate-fade-up">
-            <AnomalyBanner
-              anomalyReport={anomalyReport}
-              originalForm={data.originalForm}
-              onResubmit={handleResubmit}
-              resubmitting={resubmitting}
-            />
-          </section>
-        )}
+      {/* Sticky tab navigation */}
+      <div className="sticky top-[65px] z-40 glass-card border-b border-white/30 mt-4">
+        <div className="max-w-5xl mx-auto px-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList variant="line" className="w-full justify-start bg-transparent h-12 gap-0">
+              <TabsTrigger value="profile" className="gap-2 text-sm px-4 data-[state=active]:text-grove">
+                <Shield className="w-4 h-4" />
+                Profile
+              </TabsTrigger>
+              <TabsTrigger value="learn" className="gap-2 text-sm px-4 data-[state=active]:text-grove">
+                <GraduationCap className="w-4 h-4" />
+                Learn
+              </TabsTrigger>
+              <TabsTrigger value="plan" className="gap-2 text-sm px-4 data-[state=active]:text-grove">
+                <Leaf className="w-4 h-4" />
+                Green Plan
+              </TabsTrigger>
+              <TabsTrigger value="tutor" className="gap-2 text-sm px-4 data-[state=active]:text-grove">
+                <Sparkles className="w-4 h-4" />
+                AI Tutor
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      </div>
 
-        {/* Verification Badges (FlexID + Fraud) */}
-        {(data.flexIdResult || data.fraudResult) && (
-          <section className="animate-fade-up delay-100">
-            <VerificationBadges
-              flexIdResult={data.flexIdResult || null}
-              fraudResult={data.fraudResult || null}
-            />
-          </section>
-        )}
-
-        {/* Tri-Bureau Credit Comparison — above score so user sees full credit picture first */}
-        {data.bureauScores && data.triBureau && (
-          <section className="animate-fade-up delay-150">
-            <h2 className="font-heading text-2xl text-grove mb-4">
-              Your Credit Picture
-            </h2>
-            {!anomalyReport?.hasAnomalies && (
-              <p className="text-stone text-sm mb-4">
-                Here’s how you look across the bureaus — we use this to show what sustainable financing you qualify for below.
-              </p>
+      {/* Tab content */}
+      <main className="max-w-5xl mx-auto px-6 py-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          {/* ─── Profile Tab ─── */}
+          <TabsContent value="profile" className="space-y-6 mt-0">
+            {/* Anomaly Banner */}
+            {anomalyReport?.hasAnomalies && data.originalForm && (
+              <section className="animate-fade-up">
+                <AnomalyBanner
+                  anomalyReport={anomalyReport}
+                  originalForm={data.originalForm}
+                  onResubmit={handleResubmit}
+                  resubmitting={resubmitting}
+                />
+              </section>
             )}
-            <BureauComparison bureauScores={data.bureauScores} triBureau={data.triBureau} />
-          </section>
-        )}
 
-        {/* Data quality & duplicate accounts */}
-        {(dataQualityReport || duplicateTradelines.length > 0) && (
-          <section className="animate-fade-up delay-175 space-y-4">
-            <h2 className="font-heading text-2xl text-grove mb-2">
-              Data quality &amp; duplicate accounts
-            </h2>
-            <p className="text-stone text-sm mb-4">
-              We check your credit data for completeness and flag possible duplicate accounts so you have a clear picture.
-            </p>
-            <div className="grid gap-4">
-              {dataQualityReport && <DataQualityReport report={dataQualityReport} />}
-              {duplicateTradelines.length > 0 && <DuplicateAccounts groups={duplicateTradelines} />}
+            {/* Credit at a Glance — most important, moved to top */}
+            <section className="animate-fade-up delay-100">
+              <CreditSummary data={data.greenReadiness} />
+            </section>
+
+            {/* Verified Credit Picture — badges + bureau merged */}
+            {(data.flexIdResult || data.fraudResult || (data.bureauScores && data.triBureau)) && (
+              <section className="animate-fade-up delay-200 space-y-4">
+                <h2 className="font-heading text-xl text-grove">
+                  Your Verified Credit Picture
+                </h2>
+                {(data.flexIdResult || data.fraudResult) && (
+                  <VerificationBadges
+                    flexIdResult={data.flexIdResult || null}
+                    fraudResult={data.fraudResult || null}
+                  />
+                )}
+                {data.bureauScores && data.triBureau && (
+                  <BureauComparison bureauScores={data.bureauScores} triBureau={data.triBureau} />
+                )}
+              </section>
+            )}
+
+            {/* Data Quality & Duplicates — collapsed by default */}
+            {(dataQualityReport || duplicateTradelines.length > 0) && (
+              <details className="animate-fade-up delay-300 rounded-2xl border border-dew/40 bg-white/60 overflow-hidden group">
+                <summary className="cursor-pointer list-none px-5 py-3.5 flex items-center justify-between hover:bg-dawn/40 transition-colors [&::-webkit-details-marker]:hidden">
+                  <span className="font-heading text-base text-grove">
+                    Data Quality &amp; Diagnostics
+                  </span>
+                  <span className="text-sm text-stone">
+                    {dataQualityReport ? `Score: ${dataQualityReport.score}/100` : ""}
+                    {duplicateTradelines.length > 0 ? ` · ${duplicateTradelines.length} duplicate group${duplicateTradelines.length > 1 ? "s" : ""}` : ""}
+                  </span>
+                </summary>
+                <div className="px-5 pb-5 space-y-4 border-t border-dew/30">
+                  {dataQualityReport && <DataQualityReport report={dataQualityReport} />}
+                  {duplicateTradelines.length > 0 && <DuplicateAccounts groups={duplicateTradelines} />}
+                </div>
+              </details>
+            )}
+          </TabsContent>
+
+          {/* ─── Learn Tab ─── */}
+          <TabsContent value="learn" className="mt-0">
+            <div className="max-w-3xl mx-auto">
+              <EducationModules
+                greenReadiness={data.greenReadiness}
+                geminiAnalysis={data.geminiAnalysis}
+                bureauScores={data.bureauScores || {}}
+                investments={data.investments}
+              />
             </div>
-          </section>
-        )}
+          </TabsContent>
 
-        {/* Green Score Gauge — score/tier use lowest bureau when multiple exist */}
-        <section className="animate-fade-up delay-200 flex flex-col items-center">
-          <GreenScoreGauge score={data.greenReadiness.score} tier={data.greenReadiness.tier} />
-          {data.bureauScores && Object.values(data.bureauScores).filter((s) => s != null).length >= 2 && (
-            <p className="text-xs text-stone mt-3 max-w-sm text-center">
-              Green Readiness uses your lowest bureau score so you&apos;re prepared no matter which bureau a lender pulls.
-            </p>
-          )}
-        </section>
+          {/* ─── Green Plan Tab ─── */}
+          <TabsContent value="plan" className="space-y-6 mt-0">
+            {/* Score + AI Overview — side by side on desktop */}
+            <section className="animate-fade-up">
+              <div className="flex flex-col lg:flex-row items-center gap-6">
+                {/* Left: Gauge */}
+                <div className="flex flex-col items-center shrink-0 mx-auto lg:mx-0">
+                  <GreenScoreGauge key={activeTab} score={data.greenReadiness.score} tier={data.greenReadiness.tier} />
+                  {data.bureauScores && Object.values(data.bureauScores).filter((s) => s != null).length >= 2 && (
+                    <p className="text-xs text-stone mt-2 max-w-[200px] text-center">
+                      Uses your lowest bureau score for conservative readiness.
+                    </p>
+                  )}
+                </div>
+                {/* Right: AI Insights */}
+                <div className="flex-1 min-w-0 space-y-4">
+                  {data.geminiAnalysis?.summary && (
+                    <p className="text-soil leading-relaxed">{data.geminiAnalysis.summary}</p>
+                  )}
+                  <GeminiInsights analysis={data.geminiAnalysis} />
+                </div>
+              </div>
+            </section>
 
-        {/* Gemini Summary (under gauge) */}
-        {data.geminiAnalysis?.summary && (
-          <div className="animate-fade-up delay-300 max-w-2xl mx-auto text-center">
-            <p className="text-soil leading-relaxed">{data.geminiAnalysis.summary}</p>
-          </div>
-        )}
+            {/* Green Action Plan — capped at 6, expandable */}
+            <section className="animate-fade-up delay-100">
+              <h2 className="font-heading text-xl text-grove mb-1">
+                Your Green Action Plan
+              </h2>
+              <p className="text-stone text-sm mb-4">
+                {data.investments.length} options for Tier {data.greenReadiness.tier}, sorted by impact.
+              </p>
+              <ActionCards
+                investments={showAllActions ? data.investments : data.investments.slice(0, 6)}
+                geminiAnalysis={data.geminiAnalysis}
+                availableSavings={data.availableSavings}
+              />
+              {data.investments.length > 6 && !showAllActions && (
+                <button
+                  onClick={() => setShowAllActions(true)}
+                  className="mt-4 w-full py-3 rounded-xl border border-dew/60 text-sm font-medium text-canopy hover:bg-dawn/60 transition-colors"
+                >
+                  Show all {data.investments.length} options
+                </button>
+              )}
+            </section>
 
-        {/* Credit Snapshot */}
-        <section>
-          <h2 className="font-heading text-2xl text-grove mb-4">
-            Credit Snapshot
-          </h2>
-          <CreditSummary data={data.greenReadiness} />
-        </section>
+            {/* Environmental Impact — collapsed by default */}
+            <section className="animate-fade-up delay-200">
+              {!showImpact ? (
+                <button
+                  onClick={() => setShowImpact(true)}
+                  className="w-full py-4 rounded-2xl border border-dew/40 bg-white/60 hover:bg-dawn/40 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Leaf className="w-4 h-4 text-canopy" />
+                  <span className="font-heading text-base text-grove">View Environmental Impact Dashboard</span>
+                </button>
+              ) : (
+                <div className="animate-fade-up">
+                  <h2 className="font-heading text-xl text-grove mb-4">
+                    Environmental Impact Dashboard
+                  </h2>
+                  <ImpactChart investments={data.investments} />
+                </div>
+              )}
+            </section>
 
-        {/* Gemini AI Insights */}
-        <section>
-          <h2 className="font-heading text-2xl text-grove mb-4">
-            AI Insights
-          </h2>
-          <GeminiInsights analysis={data.geminiAnalysis} />
-        </section>
+            {/* Credit Improvement Path */}
+            <section>
+              <CreditPath greenReadiness={data.greenReadiness} geminiAnalysis={data.geminiAnalysis} />
+            </section>
+          </TabsContent>
 
-        {/* Green Action Plan */}
-        <section>
-          <h2 className="font-heading text-2xl text-grove mb-2">
-            Your Green Action Plan
-          </h2>
-          <p className="text-stone text-sm mb-1">
-            Based on your verified profile: {data.investments.length} sustainable financing options you qualify for (Tier {data.greenReadiness.tier}), sorted by environmental impact. Below is your roadmap to unlock more as your credit improves.
-          </p>
-          <p className="text-stone text-xs mb-5">
-            Each card shows estimated cost, annual savings, and tree-equivalent impact. Start with high-impact, low-cost options like transit or community solar if they fit your lifestyle.
-          </p>
-          <ActionCards investments={data.investments} geminiAnalysis={data.geminiAnalysis} availableSavings={data.availableSavings} />
-        </section>
-
-        {/* Environmental Impact */}
-        <section>
-          <h2 className="font-heading text-2xl text-grove mb-4">
-            Environmental Impact Dashboard
-          </h2>
-          <ImpactChart investments={data.investments} />
-        </section>
-
-        {/* Credit Improvement Path (only for C/D) */}
-        <section>
-          <CreditPath greenReadiness={data.greenReadiness} geminiAnalysis={data.geminiAnalysis} />
-        </section>
-
-        {/* Chat */}
-        <section>
-          <h2 className="font-heading text-2xl text-grove mb-4">
-            Ask GreenPath AI
-          </h2>
-          <GreenChat
-            greenReadiness={data.greenReadiness}
-            investments={data.investments}
-            availableSavings={data.availableSavings}
-            bureauScores={data.bureauScores}
-            flexIdVerified={data.flexIdResult?.verified}
-            fraudRiskLevel={data.fraudResult?.riskLevel}
-          />
-        </section>
+          {/* ─── AI Tutor Tab ─── */}
+          <TabsContent value="tutor" className="mt-0">
+            <div className="animate-fade-up max-w-3xl mx-auto">
+              <h2 className="font-heading text-2xl text-grove mb-4">
+                Ask GreenPath AI
+              </h2>
+              <p className="text-stone text-sm mb-6">
+                Your AI tutor knows your credit profile, green readiness tier, and all available investments.
+              </p>
+              <GreenChat
+                greenReadiness={data.greenReadiness}
+                investments={data.investments}
+                availableSavings={data.availableSavings}
+                bureauScores={data.bureauScores}
+                flexIdVerified={data.flexIdResult?.verified}
+                fraudRiskLevel={data.fraudResult?.riskLevel}
+              />
+            </div>
+          </TabsContent>
+        </Tabs>
       </main>
+
+      {/* Floating Chat FAB (hidden on AI Tutor tab) */}
+      {activeTab !== "tutor" && (
+        <ChatFAB
+          greenReadiness={data.greenReadiness}
+          investments={data.investments}
+          availableSavings={data.availableSavings}
+          bureauScores={data.bureauScores}
+          flexIdVerified={data.flexIdResult?.verified}
+          fraudRiskLevel={data.fraudResult?.riskLevel}
+        />
+      )}
 
       {/* Footer */}
       <footer className="py-8 px-6 border-t border-dew/40 mt-10">

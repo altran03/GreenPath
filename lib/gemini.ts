@@ -1,8 +1,12 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { GreenReadiness } from "./green-scoring";
 import type { GreenInvestment } from "./green-investments";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
+const MODEL = "google/gemini-3-flash-preview";
+
+function getApiKey(): string {
+  return process.env.OPENROUTER_API_KEY || "";
+}
 
 // Retry helper for rate-limited requests
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
@@ -11,7 +15,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
       return await fn();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      const isRateLimit = message.includes("429") || message.includes("RESOURCE_EXHAUSTED") || message.includes("quota");
+      const isRateLimit = message.includes("429") || message.includes("rate") || message.includes("quota");
       if (isRateLimit && attempt < maxRetries) {
         const waitSec = 10 * (attempt + 1);
         console.log(`[gemini] Rate limited, retrying in ${waitSec}s (attempt ${attempt + 1}/${maxRetries})`);
@@ -53,13 +57,6 @@ export async function analyzeGreenReadiness(
   recommendedInvestments: GreenInvestment[],
   bureauScores?: Record<string, number | null> | null
 ): Promise<GeminiAnalysis> {
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    generationConfig: {
-      responseMimeType: "application/json",
-    },
-  });
-
   const payload: Record<string, unknown> = {
     greenReadiness: {
       tier: greenReadiness.tier,
@@ -99,14 +96,30 @@ export async function analyzeGreenReadiness(
 
   const userMessage = JSON.stringify(payload, null, 2);
 
-  const result = await withRetry(() =>
-    model.generateContent([
-      { text: ANALYSIS_SYSTEM_PROMPT },
-      { text: userMessage },
-    ])
-  );
+  const res = await withRetry(async () => {
+    const r = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getApiKey()}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: "system", content: ANALYSIS_SYSTEM_PROMPT },
+          { role: "user", content: userMessage },
+        ],
+        response_format: { type: "json_object" },
+      }),
+    });
+    if (!r.ok) {
+      const errText = await r.text();
+      throw new Error(`OpenRouter ${r.status}: ${errText}`);
+    }
+    return r.json();
+  });
 
-  const text = result.response.text();
+  const text = res.choices?.[0]?.message?.content || "";
   try {
     return JSON.parse(text) as GeminiAnalysis;
   } catch {
@@ -186,24 +199,63 @@ INSTRUCTIONS:
 - Be encouraging — everyone can do something green regardless of their credit tier`;
 }
 
-export async function streamChat(
+// Returns an async generator of text chunks for streaming chat
+export async function* streamChat(
   messages: { role: string; content: string }[],
   systemPrompt: string
-) {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-  const chat = model.startChat({
-    history: messages.slice(0, -1).map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
-    })),
-    systemInstruction: systemPrompt,
+): AsyncGenerator<string> {
+  const res = await withRetry(async () => {
+    const r = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getApiKey()}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        stream: true,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...messages.map((m) => ({
+            role: m.role === "assistant" ? "assistant" : "user",
+            content: m.content,
+          })),
+        ],
+      }),
+    });
+    if (!r.ok) {
+      const errText = await r.text();
+      throw new Error(`OpenRouter ${r.status}: ${errText}`);
+    }
+    return r;
   });
 
-  const lastMessage = messages[messages.length - 1];
-  const result = await withRetry(() =>
-    chat.sendMessageStream(lastMessage.content)
-  );
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("No response body");
 
-  return result.stream;
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith("data: ")) continue;
+      const data = trimmed.slice(6);
+      if (data === "[DONE]") return;
+      try {
+        const parsed = JSON.parse(data);
+        const content = parsed.choices?.[0]?.delta?.content;
+        if (content) yield content;
+      } catch {
+        // skip malformed chunks
+      }
+    }
+  }
 }

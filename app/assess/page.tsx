@@ -7,8 +7,6 @@ import {
   Leaf,
   ArrowLeft,
   Shield,
-  Loader2,
-  CheckCircle2,
   ChevronDown,
   FlaskConical,
 } from "lucide-react";
@@ -23,15 +21,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { calculateGreenReadiness, extractCreditData } from "@/lib/green-scoring";
-import { getRecommendedInvestments } from "@/lib/green-investments";
-import {
-  isDemoPersona,
-  getDemoTriBureau,
-  getDemoCreditReportResponse,
-  getDemoFlexIdAnomaly,
-  getDemoFraudResult,
-} from "@/lib/demo-persona";
 
 const US_STATES = [
   "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS",
@@ -209,15 +198,6 @@ interface FormData {
   availableSavings: string;
 }
 
-const LOADING_STEPS = [
-  "Authenticating with CRS...",
-  "Verifying identity (FlexID)...",
-  "Pulling tri-bureau credit reports...",
-  "Running fraud analysis...",
-  "Calculating green readiness...",
-  "Generating AI insights with Gemini...",
-];
-
 export default function AssessPage() {
   const router = useRouter();
   const [form, setForm] = useState<FormData>({
@@ -235,8 +215,6 @@ export default function AssessPage() {
     email: "",
     availableSavings: "",
   });
-  const [loading, setLoading] = useState(false);
-  const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState("");
   const [testMenuOpen, setTestMenuOpen] = useState(false);
 
@@ -252,8 +230,8 @@ export default function AssessPage() {
       city: persona.city,
       state: persona.state,
       postalCode: persona.postalCode,
-      phone: "phone" in persona && persona.phone ? persona.phone : "5031234567",
-      email: "email" in persona && persona.email ? persona.email : "example@atdata.com",
+      phone: "phone" in persona && (persona as Record<string, unknown>).phone ? String((persona as Record<string, unknown>).phone) : "5031234567",
+      email: "email" in persona && (persona as Record<string, unknown>).email ? String((persona as Record<string, unknown>).email) : "example@atdata.com",
       availableSavings: "15000",
     });
     setTestMenuOpen(false);
@@ -263,223 +241,18 @@ export default function AssessPage() {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setLoading(true);
-    setLoadingStep(0);
 
-    try {
-      // Demo persona: use hardcoded anomaly flow (no CRS calls)
-      if (isDemoPersona(form)) {
-        setLoadingStep(1);
-        const creditReportPayload = getDemoCreditReportResponse();
-        const triBureau = getDemoTriBureau();
-        const primaryReport = triBureau.experian ?? creditReportPayload;
-        const creditData = extractCreditData(primaryReport as Record<string, unknown>);
-        const greenReadiness = calculateGreenReadiness(creditData);
-        const investments = getRecommendedInvestments(greenReadiness.tier);
-        const bureauScores = { experian: 680, transunion: 680, equifax: 680 };
-        setLoadingStep(4);
-        const savings = form.availableSavings ? parseFloat(form.availableSavings) : null;
-        const results = {
-          userName: `${form.firstName} ${form.lastName}`,
-          creditReport: primaryReport,
-          greenReadiness,
-          investments,
-          geminiAnalysis: null,
-          availableSavings: savings,
-          bureauScores,
-          triBureau,
-          flexIdResult: getDemoFlexIdAnomaly(),
-          fraudResult: getDemoFraudResult(),
-          originalForm: { ...form },
-        };
-        sessionStorage.setItem("greenpath-results", JSON.stringify(results));
-        router.push("/results");
-        setLoading(false);
-        return;
-      }
-
-      // Step 1: Authenticate
-      setLoadingStep(0);
-      let authRes: Response;
-      try {
-        authRes = await fetch("/api/auth", { method: "POST" });
-      } catch (netErr) {
-        throw new Error(
-          "Cannot reach the server. Check that the app is running (e.g. npm run dev or Docker) and that you're using the correct URL."
-        );
-      }
-      if (!authRes.ok) {
-        let data: { error?: string } = {};
-        try {
-          data = await authRes.json();
-        } catch {
-          /* response may not be JSON */
-        }
-        throw new Error(data.error || "Authentication failed");
-      }
-
-      // Step 2: FlexID Identity Verification (non-blocking)
-      setLoadingStep(1);
-      let flexIdResult = null;
-      try {
-        const flexRes = await fetch("/api/flex-id", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            firstName: form.firstName,
-            lastName: form.lastName,
-            ssn: form.ssn,
-            dateOfBirth: form.birthDate,
-            streetAddress: form.addressLine1,
-            city: form.city,
-            state: form.state,
-            zipCode: form.postalCode,
-            homePhone: form.phone,
-          }),
-        });
-        if (flexRes.ok) {
-          flexIdResult = await flexRes.json();
-        }
-      } catch {
-        console.warn("FlexID verification failed, continuing...");
-      }
-
-      // Step 3: Tri-Bureau Credit Reports + Step 4: Fraud Finder (in parallel)
-      setLoadingStep(2);
-      const [reportRes, fraudRes] = await Promise.all([
-        fetch("/api/credit-report", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
-        }),
-        // Start fraud finder at the same time
-        (async () => {
-          setLoadingStep(3); // Show fraud step while running in parallel
-          try {
-            const res = await fetch("/api/fraud-finder", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                firstName: form.firstName,
-                lastName: form.lastName,
-                email: form.email || undefined,
-                phoneNumber: form.phone || undefined,
-                addressLine1: form.addressLine1,
-                city: form.city,
-                state: form.state,
-                postalCode: form.postalCode,
-              }),
-            });
-            if (res.ok) return res.json();
-            return null;
-          } catch {
-            return null;
-          }
-        })(),
-      ]);
-
-      if (!reportRes.ok) {
-        let data: { error?: string } = {};
-        try {
-          data = await reportRes.json();
-        } catch {
-          /* response may not be JSON */
-        }
-        throw new Error(data.error || "Credit report pull failed");
-      }
-      let creditReport: Record<string, unknown>;
-      try {
-        creditReport = await reportRes.json();
-      } catch {
-        throw new Error("Invalid response from credit report service.");
-      }
-
-      // Extract tri-bureau data
-      type TriBureau = { experian: Record<string, unknown> | null; transunion: Record<string, unknown> | null; equifax: Record<string, unknown> | null };
-      const triBureau: TriBureau = (creditReport._triBureau as TriBureau | undefined) ?? {
-        experian: creditReport,
-        transunion: null,
-        equifax: null,
-      };
-
-      // Step 5: Calculate green readiness (use the bureau with the lowest score for a consistent snapshot)
-      setLoadingStep(4);
-      const bureauScores: Record<string, number | null> = {
-        experian: extractScore(triBureau.experian),
-        transunion: extractScore(triBureau.transunion),
-        equifax: extractScore(triBureau.equifax),
-      };
-      const bureaus: (keyof TriBureau)[] = ["experian", "transunion", "equifax"];
-      const scoresWithBureaus = bureaus
-        .map((b) => ({ bureau: b, score: bureauScores[b], report: triBureau[b] }))
-        .filter((x) => x.score != null && x.score > 0 && x.report);
-      const minEntry =
-        scoresWithBureaus.length > 0
-          ? scoresWithBureaus.reduce((a, b) => (a.score! <= b.score! ? a : b))
-          : null;
-      const displayReport =
-        minEntry?.report ?? triBureau.experian ?? triBureau.transunion ?? triBureau.equifax ?? creditReport;
-      const creditData = extractCreditData(displayReport);
-      const greenReadiness = calculateGreenReadiness(creditData);
-      const investments = getRecommendedInvestments(greenReadiness.tier);
-      const primaryReport = displayReport;
-
-      // Step 6: Get Gemini analysis
-      setLoadingStep(5);
-      let geminiAnalysis = null;
-      try {
-        const analysisRes = await fetch("/api/green-analysis", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            greenReadiness,
-            recommendedInvestments: investments,
-            bureauScores,
-          }),
-        });
-        if (analysisRes.ok) {
-          geminiAnalysis = await analysisRes.json();
-        }
-      } catch {
-        console.warn("Gemini analysis failed, continuing without AI insights");
-      }
-
-      // Store results in sessionStorage and navigate
-      const savings = form.availableSavings ? parseFloat(form.availableSavings) : null;
-      const results = {
-        userName: `${form.firstName} ${form.lastName}`,
-        creditReport: primaryReport,
-        greenReadiness,
-        investments,
-        geminiAnalysis,
-        availableSavings: savings,
-        // New CRS data
-        bureauScores,
-        triBureau,
-        flexIdResult,
-        fraudResult: fraudRes,
-        // Original form data for anomaly correction
-        originalForm: { ...form },
-      };
-      sessionStorage.setItem("greenpath-results", JSON.stringify(results));
-      router.push("/results");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Something went wrong";
-      const isNetworkFailure =
-        message === "Failed to fetch" ||
-        message.includes("Load failed") ||
-        message.includes("NetworkError") ||
-        message.includes("Cannot reach the server");
-      setError(
-        isNetworkFailure
-          ? "Cannot reach the server. Make sure the app is running (npm run dev or Docker) and you're not blocking the request. If the app is running, check .env.local has CRS_USERNAME and CRS_PASSWORD set."
-          : message
-      );
-      setLoading(false);
+    if (!form.firstName || !form.lastName || !form.ssn || !form.addressLine1 || !form.city || !form.state || !form.postalCode) {
+      setError("Please fill in all required fields.");
+      return;
     }
+
+    // Store form data and redirect to loading screen
+    sessionStorage.setItem("greenpath-pending", JSON.stringify(form));
+    router.push("/loading");
   }
 
   return (
@@ -774,56 +547,18 @@ export default function AssessPage() {
                 </div>
               )}
 
-              {/* Submit / Loading */}
-              {!loading ? (
-                <Button
-                  type="submit"
-                  size="lg"
-                  className="w-full rounded-xl bg-grove hover:bg-grove-light text-white py-6 text-lg font-medium shadow-md shadow-grove/15 hover:shadow-lg transition-all duration-300"
-                >
-                  Analyze My Green Readiness
-                </Button>
-              ) : (
-                <div className="space-y-3 py-4">
-                  {LOADING_STEPS.map((step, i) => (
-                    <div
-                      key={step}
-                      className={`flex items-center gap-3 text-sm transition-all duration-500 ${
-                        i < loadingStep
-                          ? "text-canopy"
-                          : i === loadingStep
-                          ? "text-grove font-medium"
-                          : "text-stone/50"
-                      }`}
-                    >
-                      {i < loadingStep ? (
-                        <CheckCircle2 className="w-5 h-5 text-canopy" />
-                      ) : i === loadingStep ? (
-                        <Loader2 className="w-5 h-5 animate-spin text-grove" />
-                      ) : (
-                        <div className="w-5 h-5 rounded-full border-2 border-dew" />
-                      )}
-                      {step}
-                    </div>
-                  ))}
-                </div>
-              )}
+              {/* Submit */}
+              <Button
+                type="submit"
+                size="lg"
+                className="w-full rounded-xl bg-grove hover:bg-grove-light text-white py-6 text-lg font-medium shadow-md shadow-grove/15 hover:shadow-lg transition-all duration-300"
+              >
+                Analyze My Green Readiness
+              </Button>
             </form>
           </CardContent>
         </Card>
       </main>
     </div>
   );
-}
-
-/** Helper to extract score from a CRS response (supports scoreValue or value per bureau) */
-function extractScore(report: Record<string, unknown> | null): number | null {
-  if (!report) return null;
-  const scores = report.scores as Array<Record<string, unknown>> | undefined;
-  if (scores && scores.length > 0) {
-    const raw = scores[0].scoreValue ?? scores[0].value ?? "0";
-    const val = parseInt(String(raw), 10);
-    return val > 0 ? val : null;
-  }
-  return null;
 }
