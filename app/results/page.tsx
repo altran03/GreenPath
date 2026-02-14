@@ -16,7 +16,11 @@ import { GreenChat } from "@/components/green-chat";
 import { BureauComparison } from "@/components/bureau-comparison";
 import { VerificationBadges } from "@/components/verification-badges";
 import { AnomalyBanner } from "@/components/anomaly-banner";
+import { DataQualityReport } from "@/components/data-quality-report";
+import { DuplicateAccounts } from "@/components/duplicate-accounts";
 import { detectAnomalies, type AnomalyReport } from "@/lib/anomaly-detection";
+import { runDataQualityReport, type DataQualityReport as DataQualityReportType } from "@/lib/data-quality";
+import { detectDuplicateTradelines, type DuplicateGroup } from "@/lib/duplicate-tradelines";
 import { extractCreditData, calculateGreenReadiness } from "@/lib/green-scoring";
 import { getRecommendedInvestments } from "@/lib/green-investments";
 import type { GreenReadiness } from "@/lib/green-scoring";
@@ -44,6 +48,8 @@ export default function ResultsPage() {
   const [data, setData] = useState<ResultsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [anomalyReport, setAnomalyReport] = useState<AnomalyReport | null>(null);
+  const [dataQualityReport, setDataQualityReport] = useState<DataQualityReportType | null>(null);
+  const [duplicateTradelines, setDuplicateTradelines] = useState<DuplicateGroup[]>([]);
   const [resubmitting, setResubmitting] = useState(false);
 
   useEffect(() => {
@@ -78,9 +84,19 @@ export default function ResultsPage() {
             ? { ...parsed.fraudResult, raw: parsed.fraudResult.raw || {} }
             : null,
           bureauScores: parsed.bureauScores || {},
+          triBureau: parsed.triBureau,
         });
         setAnomalyReport(report);
       }
+      // Data quality and duplicate tradelines (run on stored CRS payloads)
+      setDataQualityReport(
+        runDataQualityReport({
+          triBureau: parsed.triBureau,
+          flexIdResult: parsed.flexIdResult ?? null,
+          fraudResult: parsed.fraudResult ?? null,
+        })
+      );
+      setDuplicateTradelines(detectDuplicateTradelines({ triBureau: parsed.triBureau }) ?? []);
     } catch {
       router.push("/assess");
     }
@@ -229,8 +245,17 @@ export default function ResultsPage() {
         flexIdResult: flexIdResult ? { ...flexIdResult, raw: flexIdResult.raw || {} } : null,
         fraudResult: fraudRes ? { ...fraudRes, raw: fraudRes.raw || {} } : null,
         bureauScores,
+        triBureau: newResults.triBureau,
       });
       setAnomalyReport(report);
+      setDataQualityReport(
+        runDataQualityReport({
+          triBureau: newResults.triBureau,
+          flexIdResult: newResults.flexIdResult ?? null,
+          fraudResult: newResults.fraudResult ?? null,
+        })
+      );
+      setDuplicateTradelines(detectDuplicateTradelines({ triBureau: newResults.triBureau }) ?? []);
     } catch (err) {
       console.error("[anomaly-resubmit]", err);
       alert(err instanceof Error ? err.message : "Re-verification failed. Please try again.");
@@ -349,6 +374,22 @@ export default function ResultsPage() {
               </p>
             )}
             <BureauComparison bureauScores={data.bureauScores} triBureau={data.triBureau} />
+          </section>
+        )}
+
+        {/* Data quality & duplicate accounts */}
+        {(dataQualityReport || duplicateTradelines.length > 0) && (
+          <section className="animate-fade-up delay-175 space-y-4">
+            <h2 className="font-heading text-2xl text-grove mb-2">
+              Data quality &amp; duplicate accounts
+            </h2>
+            <p className="text-stone text-sm mb-4">
+              We check your credit data for completeness and flag possible duplicate accounts so you have a clear picture.
+            </p>
+            <div className="grid gap-4">
+              {dataQualityReport && <DataQualityReport report={dataQualityReport} />}
+              {duplicateTradelines.length > 0 && <DuplicateAccounts groups={duplicateTradelines} />}
+            </div>
           </section>
         )}
 

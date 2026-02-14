@@ -55,6 +55,8 @@ interface DetectionInput {
     raw: Record<string, unknown>;
   } | null;
   bureauScores: Record<string, number | null>;
+  /** Optional: raw tri-bureau reports for cross-bureau identity comparison */
+  triBureau?: Record<string, Record<string, unknown> | null>;
 }
 
 export function detectAnomalies(input: DetectionInput): AnomalyReport {
@@ -215,6 +217,25 @@ export function detectAnomalies(input: DetectionInput): AnomalyReport {
     }
   }
 
+  // ──── Cross-Bureau Identity Comparison ────
+  // Compare name/SSN/DOB across bureaus when raw reports are available
+  if (input.triBureau) {
+    const bureauIdentities = extractBureauIdentities(input.triBureau);
+    const identityMismatches = compareBureauIdentities(bureauIdentities);
+    for (const m of identityMismatches) {
+      anomalies.push({
+        id: m.id,
+        field: m.field,
+        fieldLabel: m.fieldLabel,
+        source: "Cross-Bureau Identity",
+        severity: m.severity,
+        message: m.message,
+        userValue: m.userValue,
+        suggestedValue: m.suggestedValue,
+      });
+    }
+  }
+
   // ──── Tri-Bureau Score Discrepancy Anomaly ────
   // Only compare scores from bureaus that actually returned data
   const scores = Object.entries(input.bureauScores)
@@ -281,4 +302,149 @@ function deduplicateAnomalies(anomalies: Anomaly[]): Anomaly[] {
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// ──── Cross-bureau identity extraction and comparison ────
+
+type BureauKey = "experian" | "transunion" | "equifax";
+
+interface BureauIdentity {
+  bureau: BureauKey;
+  firstName: string;
+  lastName: string;
+  ssnLast4: string;
+  dateOfBirth: string;
+}
+
+function getStr(obj: Record<string, unknown> | undefined, ...keys: string[]): string {
+  if (!obj) return "";
+  for (const k of keys) {
+    const v = obj[k];
+    if (v !== undefined && v !== null) {
+      const s = String(v).trim();
+      if (s) return s;
+    }
+  }
+  return "";
+}
+
+/** Extract consumer identity from a single bureau report (CRS Standard Format). */
+function extractIdentityFromReport(report: Record<string, unknown> | null): Partial<BureauIdentity> | null {
+  if (!report) return null;
+  const tryBlock = (block: Record<string, unknown> | undefined): Partial<BureauIdentity> | null => {
+    if (!block) return null;
+    const firstName = getStr(block, "firstName", "FirstName", "first_name", "givenName");
+    const lastName = getStr(block, "lastName", "LastName", "last_name", "surname", "familyName");
+    const ssn = getStr(block, "ssn", "SSN", "socialSecurityNumber", "socialSecurityNumberValue");
+    const ssnLast4 = ssn.replace(/\D/g, "").slice(-4);
+    const dateOfBirth = getStr(block, "dateOfBirth", "birthDate", "dateofBirth", "dob", "DateOfBirth");
+    if (!firstName && !lastName && !ssnLast4 && !dateOfBirth) return null;
+    return { firstName, lastName, ssnLast4, dateOfBirth };
+  };
+
+  const consumer = (report.consumer ?? report.Consumer ?? report.person ?? report.subject) as Record<string, unknown> | undefined;
+  let out = tryBlock(consumer ?? undefined);
+  if (out) return out;
+
+  const creditFiles = report.creditFiles as Array<Record<string, unknown>> | undefined;
+  if (Array.isArray(creditFiles) && creditFiles[0]) {
+    const cf = creditFiles[0];
+    const primary = (cf.consumer ?? cf.primaryApplicant ?? cf.PrimaryApplicant ?? cf.person) as Record<string, unknown> | undefined;
+    out = tryBlock(primary ?? undefined);
+    if (out) return out;
+  }
+  return null;
+}
+
+function extractBureauIdentities(triBureau: Record<string, Record<string, unknown> | null>): Map<BureauKey, BureauIdentity> {
+  const map = new Map<BureauKey, BureauIdentity>();
+  const bureaus: BureauKey[] = ["experian", "transunion", "equifax"];
+  for (const bureau of bureaus) {
+    const report = triBureau[bureau];
+    const partial = extractIdentityFromReport(report ?? null);
+    if (partial && (partial.firstName || partial.lastName || partial.ssnLast4 || partial.dateOfBirth)) {
+      map.set(bureau, {
+        bureau,
+        firstName: partial.firstName ?? "",
+        lastName: partial.lastName ?? "",
+        ssnLast4: partial.ssnLast4 ?? "",
+        dateOfBirth: partial.dateOfBirth ?? "",
+      });
+    }
+  }
+  return map;
+}
+
+function normalizeForCompare(s: string): string {
+  return s.toUpperCase().replace(/\s+/g, " ").trim();
+}
+
+interface IdentityMismatch {
+  id: string;
+  field: string;
+  fieldLabel: string;
+  severity: "warning" | "critical";
+  message: string;
+  userValue: string;
+  suggestedValue?: string;
+}
+
+function compareBureauIdentities(bureauIdentities: Map<BureauKey, BureauIdentity>): IdentityMismatch[] {
+  const mismatches: IdentityMismatch[] = [];
+  const entries = Array.from(bureauIdentities.entries());
+  if (entries.length < 2) return mismatches;
+
+  const allFirst = new Set(entries.map(([, id]) => normalizeForCompare(id.firstName)).filter(Boolean));
+  const allLast = new Set(entries.map(([, id]) => normalizeForCompare(id.lastName)).filter(Boolean));
+  const allSsn = new Set(entries.map(([, id]) => id.ssnLast4).filter((s) => s.length >= 4));
+  const allDob = new Set(entries.map(([, id]) => id.dateOfBirth).filter(Boolean));
+
+  if (allFirst.size > 1) {
+    const bureaus = entries.map(([b, id]) => `${capitalize(b)}: ${id.firstName || "(empty)"}`).join("; ");
+    mismatches.push({
+      id: "cross-bureau-firstname",
+      field: "firstName",
+      fieldLabel: "First name",
+      severity: "warning",
+      message: `First name differs across bureaus — ${bureaus}. This can indicate a mixed file or reporting error.`,
+      userValue: entries[0][1].firstName || "(varies)",
+      suggestedValue: entries.find(([, id]) => id.firstName)?.[1].firstName,
+    });
+  }
+  if (allLast.size > 1) {
+    const bureaus = entries.map(([b, id]) => `${capitalize(b)}: ${id.lastName || "(empty)"}`).join("; ");
+    mismatches.push({
+      id: "cross-bureau-lastname",
+      field: "lastName",
+      fieldLabel: "Last name",
+      severity: "warning",
+      message: `Last name differs across bureaus — ${bureaus}. This can indicate a mixed file or reporting error.`,
+      userValue: entries[0][1].lastName || "(varies)",
+      suggestedValue: entries.find(([, id]) => id.lastName)?.[1].lastName,
+    });
+  }
+  if (allSsn.size > 1) {
+    const bureaus = entries.map(([b, id]) => `${capitalize(b)}: ••••${id.ssnLast4}`).join("; ");
+    mismatches.push({
+      id: "cross-bureau-ssn",
+      field: "ssn",
+      fieldLabel: "SSN",
+      severity: "critical",
+      message: `SSN (last 4) differs across bureaus — ${bureaus}. This may indicate a mixed credit file.`,
+      userValue: "••••" + (entries[0][1].ssnLast4 || "????"),
+    });
+  }
+  if (allDob.size > 1) {
+    const bureaus = entries.map(([b, id]) => `${capitalize(b)}: ${id.dateOfBirth || "(empty)"}`).join("; ");
+    mismatches.push({
+      id: "cross-bureau-dob",
+      field: "birthDate",
+      fieldLabel: "Date of birth",
+      severity: "warning",
+      message: `Date of birth differs across bureaus — ${bureaus}. This can indicate a mixed file or reporting error.`,
+      userValue: entries[0][1].dateOfBirth || "(varies)",
+      suggestedValue: entries.find(([, id]) => id.dateOfBirth)?.[1].dateOfBirth,
+    });
+  }
+  return mismatches;
 }
