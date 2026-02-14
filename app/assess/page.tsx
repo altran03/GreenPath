@@ -257,7 +257,7 @@ export default function AssessPage() {
         </div>
 
         {/* Test Data Button */}
-        <div className="animate-fade-up delay-100 mb-8 relative">
+        <div className="animate-fade-up delay-100 mb-8 relative z-40">
           <button
             type="button"
             onClick={() => setTestMenuOpen(!testMenuOpen)}
@@ -270,7 +270,7 @@ export default function AssessPage() {
             <ChevronDown className={`w-4 h-4 transition-transform ${testMenuOpen ? "rotate-180" : ""}`} />
           </button>
           {testMenuOpen && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-dew/60 overflow-hidden z-30 animate-scale-in">
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-dew/60 overflow-hidden z-50 animate-scale-in">
               {TEST_PERSONAS.map((p) => (
                 <button
                   key={p.ssn}
