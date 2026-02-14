@@ -225,10 +225,10 @@ export async function verifyIdentityFlexID(
 
   const data = await res.json();
 
-  // Log raw FlexID response in dev so you can inspect CVI, verifiedElementSummary, etc.
-  if (process.env.NODE_ENV === "development") {
-    console.log("[flex-id] Raw response:", JSON.stringify(data, null, 2));
-  }
+  // Log FlexID request (redacted) and full response for debugging
+  const requestLog = { ...body, ssn: body.ssn ? "••••" + String(body.ssn).slice(-4) : undefined };
+  console.log("[flex-id] Request:", JSON.stringify(requestLog, null, 2));
+  console.log("[flex-id] Response:", JSON.stringify(data, null, 2));
 
   // Parse real FlexID response structure
   // data.result.comprehensiveVerification.comprehensiveVerificationIndex = CVI score
@@ -240,8 +240,14 @@ export async function verifyIdentityFlexID(
   const nassSum = typeof result.nameAddressSSNSummary === "number" ? result.nameAddressSSNSummary : 0;
   const verifiedElements = (result.verifiedElementSummary || {}) as Record<string, boolean>;
 
-  // Identity is considered verified if CVI >= 20 OR nameAddressSSNSummary >= 6
-  const verified = cvi >= 20 || nassSum >= 6;
+  // Critical element mismatches: if the API says these didn't match, don't call identity "verified"
+  const addressMismatch = verifiedElements.streetAddress === false || verifiedElements.address === false;
+  const dobMismatch = verifiedElements.dateOfBirth === false || verifiedElements.dob === false;
+  const ssnMismatch = verifiedElements.ssn === false;
+  const hasCriticalMismatch = addressMismatch || dobMismatch || ssnMismatch;
+
+  // Identity is considered verified only when score is strong AND no critical elements failed
+  const verified = (cvi >= 20 || nassSum >= 6) && !hasCriticalMismatch;
 
   return {
     verified,

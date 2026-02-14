@@ -23,6 +23,12 @@ import { runDataQualityReport, type DataQualityReport as DataQualityReportType }
 import { detectDuplicateTradelines, type DuplicateGroup } from "@/lib/duplicate-tradelines";
 import { extractCreditData, calculateGreenReadiness } from "@/lib/green-scoring";
 import { getRecommendedInvestments } from "@/lib/green-investments";
+import {
+  isDemoPersona,
+  getDemoCreditReportResponse,
+  getDemoFlexIdCorrected,
+  getDemoFraudResult,
+} from "@/lib/demo-persona";
 import type { GreenReadiness } from "@/lib/green-scoring";
 import type { GreenInvestment } from "@/lib/green-investments";
 import type { GeminiAnalysis } from "@/lib/gemini";
@@ -109,6 +115,73 @@ export default function ResultsPage() {
     setResubmitting(true);
 
     try {
+      // Demo persona: use corrected mocks directly so discrepancy always clears (no API dependency)
+      if (isDemoPersona(correctedForm)) {
+        const creditReportPayload = getDemoCreditReportResponse() as Record<string, unknown>;
+        const triBureau = creditReportPayload._triBureau as Record<string, Record<string, unknown> | null> | undefined;
+        const resolvedTriBureau = triBureau ?? {
+          experian: creditReportPayload,
+          transunion: creditReportPayload,
+          equifax: creditReportPayload,
+        };
+        const displayReport = resolvedTriBureau.experian ?? creditReportPayload;
+        const creditData = extractCreditData(displayReport);
+        const greenReadiness = calculateGreenReadiness(creditData);
+        const investments = getRecommendedInvestments(greenReadiness.tier);
+        const bureauScores = {
+          experian: 680,
+          transunion: 680,
+          equifax: 680,
+        };
+        const flexIdResult = getDemoFlexIdCorrected();
+        const fraudRes = getDemoFraudResult();
+        const savings = correctedForm.availableSavings ? parseFloat(correctedForm.availableSavings) : null;
+        const newResults: ResultsData = {
+          userName: `${correctedForm.firstName} ${correctedForm.lastName}`,
+          creditReport: displayReport,
+          greenReadiness,
+          investments,
+          geminiAnalysis: null,
+          availableSavings: savings,
+          bureauScores,
+          triBureau: resolvedTriBureau,
+          flexIdResult,
+          fraudResult: fraudRes,
+          originalForm: correctedForm,
+        };
+        sessionStorage.setItem("greenpath-results", JSON.stringify(newResults));
+        setData(newResults);
+        const report = detectAnomalies({
+          formData: {
+            firstName: correctedForm.firstName || "",
+            lastName: correctedForm.lastName || "",
+            ssn: correctedForm.ssn || "",
+            birthDate: correctedForm.birthDate || "",
+            addressLine1: correctedForm.addressLine1 || "",
+            city: correctedForm.city || "",
+            state: correctedForm.state || "",
+            postalCode: correctedForm.postalCode || "",
+            phone: correctedForm.phone || "",
+            email: correctedForm.email || "",
+          },
+          flexIdResult: { ...flexIdResult, raw: flexIdResult.raw || {} },
+          fraudResult: { ...fraudRes, raw: fraudRes.raw || {} },
+          bureauScores,
+          triBureau: resolvedTriBureau,
+        });
+        setAnomalyReport(report);
+        setDataQualityReport(
+          runDataQualityReport({
+            triBureau: resolvedTriBureau,
+            flexIdResult,
+            fraudResult: fraudRes,
+          })
+        );
+        setDuplicateTradelines(detectDuplicateTradelines({ triBureau: resolvedTriBureau }) ?? []);
+        setResubmitting(false);
+        return;
+      }
+
       // Step 1: Auth
       const authRes = await fetch("/api/auth", { method: "POST" });
       if (!authRes.ok) throw new Error("Authentication failed");

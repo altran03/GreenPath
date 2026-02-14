@@ -25,6 +25,13 @@ import {
 } from "@/components/ui/select";
 import { calculateGreenReadiness, extractCreditData } from "@/lib/green-scoring";
 import { getRecommendedInvestments } from "@/lib/green-investments";
+import {
+  isDemoPersona,
+  getDemoTriBureau,
+  getDemoCreditReportResponse,
+  getDemoFlexIdAnomaly,
+  getDemoFraudResult,
+} from "@/lib/demo-persona";
 
 const US_STATES = [
   "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS",
@@ -94,7 +101,72 @@ const TEST_PERSONAS = [
     postalCode: "937107453",
   },
   {
-    label: "John Cope (CA) — FlexID only",
+    label: "Fabrice G Bernabe (IN)",
+    firstName: "FABRICE",
+    middleName: "G",
+    lastName: "BERNABE",
+    ssn: "666364064",
+    birthDate: "",
+    addressLine1: "1299 W MAIN ST",
+    addressLine2: " ",
+    city: "DANVILLE",
+    state: "IN",
+    postalCode: "461227953",
+  },
+  {
+    label: "Nancy A Bateson (WV)",
+    firstName: "NANCY",
+    middleName: "A",
+    lastName: "BATESON",
+    ssn: "666741865",
+    birthDate: "1968-02-26",
+    addressLine1: "2016 ROXALANA RD",
+    addressLine2: " ",
+    city: "DUNBAR",
+    state: "WV",
+    postalCode: "250641829",
+  },
+  {
+    label: "Sergio Bernal (TX)",
+    firstName: "SERGIO",
+    middleName: "",
+    lastName: "BERNAL",
+    ssn: "666362447",
+    birthDate: "1953-08-05",
+    addressLine1: "5110 SUE AVE",
+    addressLine2: " ",
+    city: "GROVES",
+    state: "TX",
+    postalCode: "776193125",
+  },
+  {
+    label: "Theresa A Bloom Jr (NY)",
+    firstName: "THERESA",
+    middleName: "A",
+    lastName: "BLOOM",
+    suffix: "JR",
+    ssn: "666583205",
+    birthDate: "",
+    addressLine1: "1401 JEFFERSON ST",
+    addressLine2: " ",
+    city: "FLORAL PARK",
+    state: "NY",
+    postalCode: "110013724",
+  },
+  {
+    label: "Demo: Anomaly → Corrected (Sponsor)",
+    firstName: "ALEX",
+    middleName: "",
+    lastName: "DEMO",
+    ssn: "111111111",
+    birthDate: "1985-06-15",
+    addressLine1: "456 OLD AVE",
+    city: "OAKLAND",
+    state: "CA",
+    postalCode: "94601",
+  },
+  {
+    label: "John Cope (CA) — FlexID",
     firstName: "JOHN",
     middleName: "",
     lastName: "COPE",
@@ -107,16 +179,17 @@ const TEST_PERSONAS = [
     phone: "5105811251",
   },
   {
-    label: "Kylia Paolimelli (NM)",
-    firstName: "KYLIA",
+    label: "Natalie Korzec (WA) — FlexID",
+    firstName: "NATALIE",
     middleName: "",
-    lastName: "PAOLIMELLI",
-    ssn: "666285642",
-    birthDate: "1920-01-01",
-    addressLine1: "406 E JEMEZ ST",
-    city: "HOBBS",
-    state: "NM",
-    postalCode: "882403443",
+    lastName: "KORZEC",
+    ssn: "7537",
+    birthDate: "1940-12-23",
+    addressLine1: "801 E OGDEN 1011",
+    city: "VAUGHN",
+    state: "WA",
+    postalCode: "98394",
+    phone: "5031234567",
   },
 ];
 
@@ -197,6 +270,37 @@ export default function AssessPage() {
     setLoadingStep(0);
 
     try {
+      // Demo persona: use hardcoded anomaly flow (no CRS calls)
+      if (isDemoPersona(form)) {
+        setLoadingStep(1);
+        const creditReportPayload = getDemoCreditReportResponse();
+        const triBureau = getDemoTriBureau();
+        const primaryReport = triBureau.experian ?? creditReportPayload;
+        const creditData = extractCreditData(primaryReport as Record<string, unknown>);
+        const greenReadiness = calculateGreenReadiness(creditData);
+        const investments = getRecommendedInvestments(greenReadiness.tier);
+        const bureauScores = { experian: 680, transunion: 680, equifax: 680 };
+        setLoadingStep(4);
+        const savings = form.availableSavings ? parseFloat(form.availableSavings) : null;
+        const results = {
+          userName: `${form.firstName} ${form.lastName}`,
+          creditReport: primaryReport,
+          greenReadiness,
+          investments,
+          geminiAnalysis: null,
+          availableSavings: savings,
+          bureauScores,
+          triBureau,
+          flexIdResult: getDemoFlexIdAnomaly(),
+          fraudResult: getDemoFraudResult(),
+          originalForm: { ...form },
+        };
+        sessionStorage.setItem("greenpath-results", JSON.stringify(results));
+        router.push("/results");
+        setLoading(false);
+        return;
+      }
+
       // Step 1: Authenticate
       setLoadingStep(0);
       let authRes: Response;
@@ -436,13 +540,13 @@ export default function AssessPage() {
             <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-dew/60 overflow-hidden z-50 animate-scale-in">
               {TEST_PERSONAS.map((p) => (
                 <button
-                  key={p.ssn}
+                  key={p.label}
                   type="button"
                   onClick={() => fillTestData(p)}
                   className="w-full text-left px-5 py-3 hover:bg-dawn transition-colors text-sm border-b border-dew/30 last:border-0"
                 >
                   <span className="font-medium text-grove">{p.label}</span>
-                  <span className="text-stone ml-2">SSN: {p.ssn}</span>
+                  <span className="text-stone ml-2">{p.ssn ? `SSN: ${p.ssn}` : "DOB only"}</span>
                 </button>
               ))}
             </div>

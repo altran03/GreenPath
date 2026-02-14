@@ -79,6 +79,7 @@ export function detectAnomalies(input: DetectionInput): AnomalyReport {
 
       // Only flag field-level mismatches when identity was NOT verified overall
       if (verifiedElements.streetAddress === false || verifiedElements.address === false) {
+        const suggestedAddress = (raw as Record<string, unknown>).suggestedAddress as string | undefined;
         anomalies.push({
           id: "flexid-address",
           field: "addressLine1",
@@ -87,6 +88,7 @@ export function detectAnomalies(input: DetectionInput): AnomalyReport {
           severity: "warning",
           message: "Address does not match records associated with this identity.",
           userValue: input.formData.addressLine1,
+          ...(suggestedAddress && { suggestedValue: suggestedAddress }),
         });
       }
 

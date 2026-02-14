@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyIdentityFlexID, type FlexIDInput } from "@/lib/crs";
+import { isDemoPersona, getDemoFlexIdCorrected } from "@/lib/demo-persona";
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,6 +11,10 @@ export async function POST(request: NextRequest) {
         { error: "Missing required fields: firstName, lastName, ssn" },
         { status: 400 }
       );
+    }
+
+    if (isDemoPersona(body)) {
+      return NextResponse.json(getDemoFlexIdCorrected());
     }
 
     const result = await verifyIdentityFlexID(body);

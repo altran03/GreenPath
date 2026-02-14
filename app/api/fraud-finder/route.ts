@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runFraudFinder, type FraudFinderInput } from "@/lib/crs";
+import { isDemoPersona, getDemoFraudResult } from "@/lib/demo-persona";
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,6 +11,10 @@ export async function POST(request: NextRequest) {
         { error: "Missing required fields: firstName, lastName, addressLine1" },
         { status: 400 }
       );
+    }
+
+    if (isDemoPersona(body)) {
+      return NextResponse.json(getDemoFraudResult());
     }
 
     const result = await runFraudFinder(body);
