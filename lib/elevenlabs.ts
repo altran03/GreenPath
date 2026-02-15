@@ -4,7 +4,7 @@
  */
 
 const ELEVENLABS_BASE = "https://api.elevenlabs.io/v1";
-const VOICE_ID = "Y4IXKUGYisXg2f1YhBmi";
+const VOICE_ID = "cgSgspJ2msm6clMCkdW9";
 const MODEL_ID = "eleven_multilingual_v2";
 
 function getApiKey(): string {
