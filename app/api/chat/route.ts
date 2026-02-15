@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
         flexIdVerified?: boolean | null;
         fraudRiskLevel?: string | null;
       };
+      voiceMode?: boolean;
     };
 
     if (!body.messages || !body.context) {
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const systemPrompt = createChatSystemPrompt(
+    let systemPrompt = createChatSystemPrompt(
       body.context.greenReadiness,
       body.context.investments,
       body.context.availableSavings,
@@ -51,7 +52,18 @@ export async function POST(request: NextRequest) {
       body.context.fraudRiskLevel
     );
 
-    console.log("[chat] Starting stream for", body.messages.length, "messages");
+    if (body.voiceMode) {
+      systemPrompt += `\n\nIMPORTANT — VOICE MODE: The user is talking to you by voice and will hear your response spoken aloud. Keep responses SHORT and conversational:
+- Maximum 2-3 sentences per response
+- Talk like a friend, not a textbook — use casual language
+- No bullet points, no markdown formatting, no lists
+- Don't say "here are some options" — just give your best recommendation
+- Use natural speech patterns ("So basically...", "The cool thing is...", "Here's the deal...")
+- Reference their actual numbers but keep it brief
+- If they ask something complex, give the headline answer first, then ask if they want more detail`;
+    }
+
+    console.log("[chat] Starting stream for", body.messages.length, "messages", body.voiceMode ? "(voice)" : "");
     const stream = await streamChat(body.messages, systemPrompt);
 
     const encoder = new TextEncoder();

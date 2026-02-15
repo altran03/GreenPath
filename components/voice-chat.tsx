@@ -130,6 +130,7 @@ export function VoiceChat({
         body: JSON.stringify({
           messages: newMessages,
           context: { greenReadiness, investments, availableSavings, bureauScores, flexIdVerified, fraudRiskLevel },
+          voiceMode: true,
         }),
       });
 
