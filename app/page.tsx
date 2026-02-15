@@ -184,7 +184,7 @@ export default function LandingPage() {
             <Leaf className="w-4 h-4 text-canopy" />
             <span>Built for SF Hacks 2026</span>
           </div>
-          <p>Powered by CRS Credit API &amp; Gemini via OpenRouter</p>
+          <p>Powered by CRS Credit API &amp; Google Gemini</p>
         </div>
       </footer>
     </div>

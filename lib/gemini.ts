@@ -1,11 +1,11 @@
 import type { GreenReadiness } from "./green-scoring";
 import type { GreenInvestment } from "./green-investments";
 
-const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
+const GEMINI_BASE = "https://openrouter.ai/api/v1";
 const MODEL = "google/gemini-3-flash-preview";
 
 function getApiKey(): string {
-  return process.env.OPENROUTER_API_KEY || "";
+  return process.env.GEMINI_API_KEY || process.env.OPENROUTER_API_KEY || "";
 }
 
 // Retry helper for rate-limited requests
@@ -109,7 +109,7 @@ export async function analyzeGreenReadiness(
   const userMessage = JSON.stringify(payload, null, 2);
 
   const res = await withRetry(async () => {
-    const r = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+    const r = await fetch(`${GEMINI_BASE}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -126,7 +126,7 @@ export async function analyzeGreenReadiness(
     });
     if (!r.ok) {
       const errText = await r.text();
-      throw new Error(`OpenRouter ${r.status}: ${errText}`);
+      throw new Error(`Gemini ${r.status}: ${errText}`);
     }
     return r.json();
   });
@@ -217,7 +217,7 @@ export async function* streamChat(
   systemPrompt: string
 ): AsyncGenerator<string> {
   const res = await withRetry(async () => {
-    const r = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+    const r = await fetch(`${GEMINI_BASE}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -237,7 +237,7 @@ export async function* streamChat(
     });
     if (!r.ok) {
       const errText = await r.text();
-      throw new Error(`OpenRouter ${r.status}: ${errText}`);
+      throw new Error(`Gemini ${r.status}: ${errText}`);
     }
     return r;
   });
@@ -316,7 +316,7 @@ export async function generateQuiz(
   }, null, 2);
 
   const res = await withRetry(async () => {
-    const r = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+    const r = await fetch(`${GEMINI_BASE}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -333,7 +333,7 @@ export async function generateQuiz(
     });
     if (!r.ok) {
       const errText = await r.text();
-      throw new Error(`OpenRouter ${r.status}: ${errText}`);
+      throw new Error(`Gemini ${r.status}: ${errText}`);
     }
     return r.json();
   });

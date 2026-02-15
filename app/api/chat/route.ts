@@ -34,9 +34,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!process.env.OPENROUTER_API_KEY) {
-      console.error("[chat] OPENROUTER_API_KEY is not set");
-      return new Response(JSON.stringify({ error: "OpenRouter API key is not configured" }), {
+    if (!process.env.GEMINI_API_KEY && !process.env.OPENROUTER_API_KEY) {
+      console.error("[chat] GEMINI_API_KEY is not set");
+      return new Response(JSON.stringify({ error: "Gemini API key is not configured" }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
       });

@@ -11,6 +11,7 @@ import {
   Shield,
   GraduationCap,
   Sparkles,
+  Play,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,8 +29,14 @@ import { AnomalyBanner } from "@/components/anomaly-banner";
 import { DataQualityReport } from "@/components/data-quality-report";
 import { DuplicateAccounts } from "@/components/duplicate-accounts";
 import { StudyPlan } from "@/components/study-plan";
+import { VoiceBriefing } from "@/components/voice-briefing";
 import { ChatFAB } from "@/components/chat-fab";
 import { CreditSimulator } from "@/components/credit-simulator";
+import GreenWrapped from "@/components/green-wrapped";
+import { ShareCard } from "@/components/share-card";
+import { YouVsAverage } from "@/components/you-vs-average";
+import { AchievementBadges } from "@/components/achievement-badges";
+import { ImpactVisualizer } from "@/components/impact-visualizer";
 import { getTierLabel, getEstimatedRate } from "@/lib/utils";
 import { detectAnomalies, type AnomalyReport } from "@/lib/anomaly-detection";
 import { runDataQualityReport, type DataQualityReport as DataQualityReportType } from "@/lib/data-quality";
@@ -77,6 +84,10 @@ export default function ResultsPage() {
   const [showAllActions, setShowAllActions] = useState(false);
   const [showImpact, setShowImpact] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showWrapped, setShowWrapped] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !sessionStorage.getItem("greenpath-wrapped-seen");
+  });
 
   useEffect(() => {
     const stored = sessionStorage.getItem("greenpath-results");
@@ -484,8 +495,27 @@ export default function ResultsPage() {
             Based on your verified credit profile. Generated on {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
             {" · "}
             <span className="text-canopy font-medium">{crsProductsUsed.length} CRS products used</span>
+            {" · "}
+            <button
+              onClick={() => setShowWrapped(true)}
+              className="inline-flex items-center gap-1 text-grove hover:text-canopy transition-colors font-medium"
+            >
+              <Play className="w-3 h-3" />
+              Replay Wrapped
+            </button>
           </p>
         </div>
+      </div>
+
+      {/* Voice Briefing */}
+      <div className="max-w-5xl mx-auto px-6 mt-4">
+        <VoiceBriefing
+          userName={data.userName}
+          greenReadiness={data.greenReadiness}
+          investments={data.investments}
+          geminiAnalysis={data.geminiAnalysis}
+          bureauScores={data.bureauScores}
+        />
       </div>
 
       {/* Sticky tab navigation */}
@@ -581,6 +611,25 @@ export default function ResultsPage() {
                 </div>
               </details>
             )}
+
+            {/* Achievement Badges */}
+            <section className="animate-fade-up delay-300">
+              <AchievementBadges
+                greenReadiness={data.greenReadiness}
+                investments={data.investments}
+                bureauScores={data.bureauScores}
+              />
+            </section>
+
+            {/* Shareable Score Card */}
+            <section className="animate-fade-up delay-400">
+              <h2 className="font-heading text-xl text-grove mb-4">Share Your Score</h2>
+              <ShareCard
+                userName={data.userName}
+                greenReadiness={data.greenReadiness}
+                investments={data.investments}
+              />
+            </section>
           </TabsContent>
 
           {/* ─── Learn Tab ─── */}
@@ -619,8 +668,21 @@ export default function ResultsPage() {
               </div>
             </section>
 
-            {/* Credit Simulator — What-If Tool */}
+            {/* Impact Visualizer — animated counters */}
             <section className="animate-fade-up delay-100">
+              <ImpactVisualizer investments={data.investments} />
+            </section>
+
+            {/* You vs. Average American */}
+            <section className="animate-fade-up delay-100">
+              <YouVsAverage
+                greenReadiness={data.greenReadiness}
+                investments={data.investments}
+              />
+            </section>
+
+            {/* Credit Simulator — What-If Tool */}
+            <section className="animate-fade-up delay-200">
               <CreditSimulator
                 greenReadiness={data.greenReadiness}
                 investments={data.investments}
@@ -723,9 +785,23 @@ export default function ResultsPage() {
             <Leaf className="w-4 h-4 text-canopy" />
             <span>GreenPath — Built for SF Hacks 2026</span>
           </div>
-          <p>Powered by CRS Credit API ({crsProductsUsed.length} products) &amp; Gemini via OpenRouter</p>
+          <p>Powered by CRS Credit API ({crsProductsUsed.length} products) &amp; Google Gemini</p>
         </div>
       </footer>
+
+      {/* Green Score Wrapped overlay */}
+      {showWrapped && (
+        <GreenWrapped
+          userName={data.userName}
+          greenReadiness={data.greenReadiness}
+          investments={data.investments}
+          bureauScores={data.bureauScores}
+          onClose={() => {
+            setShowWrapped(false);
+            sessionStorage.setItem("greenpath-wrapped-seen", "true");
+          }}
+        />
+      )}
     </div>
   );
 }

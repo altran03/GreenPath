@@ -197,6 +197,7 @@ export function StudyPlan({
       if (!quiz) return prev;
       return { ...prev, [moduleId]: { ...quiz, revealed: true } };
     });
+    try { localStorage.setItem("greenpath-quiz-completed", "true"); } catch {}
   }
 
   function toggleComplete(id: string) {
