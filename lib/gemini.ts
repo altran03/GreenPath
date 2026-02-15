@@ -5,7 +5,7 @@ const GEMINI_BASE = "https://openrouter.ai/api/v1";
 const MODEL = "google/gemini-3-flash-preview";
 
 function getApiKey(): string {
-  return process.env.GEMINI_API_KEY || process.env.OPENROUTER_API_KEY || "";
+  return process.env.OPENROUTER_API_KEY || "";
 }
 
 // Retry helper for rate-limited requests
