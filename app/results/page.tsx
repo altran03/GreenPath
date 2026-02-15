@@ -476,7 +476,7 @@ export default function ResultsPage() {
               variant="outline"
               size="sm"
               className="rounded-lg border-dew/60 text-grove gap-1.5"
-              onClick={() => window.open("/report", "_blank")}
+              onClick={() => window.open("/report?print=1", "_blank")}
             >
               <Download className="w-3.5 h-3.5" />
               Export

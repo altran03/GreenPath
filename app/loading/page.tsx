@@ -38,14 +38,59 @@ interface LoadingStep {
   status: "pending" | "active" | "complete" | "error";
 }
 
-const INITIAL_STEPS: Omit<LoadingStep, "status">[] = [
-  { id: "auth", label: "Authenticating with CRS", sublabel: "Connecting to CRS Gateway", icon: Shield },
-  { id: "flexid", label: "Verifying identity", sublabel: "Checking LexisNexis records", icon: Fingerprint },
-  { id: "credit", label: "Pulling credit reports", sublabel: "Experian, TransUnion, and Equifax", icon: Building },
-  { id: "fraud", label: "Running fraud analysis", sublabel: "CRS Fraud Finder by AtData", icon: ScanSearch },
-  { id: "green", label: "Calculating green readiness", sublabel: "Scoring across 4 factors", icon: Leaf },
-  { id: "gemini", label: "Generating AI insights", sublabel: "Gemini analyzing your profile", icon: Sparkles },
-];
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+const STEP_SUBLABELS: Record<string, string[]> = {
+  auth: [
+    "Connecting to CRS Gateway",
+    "Establishing secure connection",
+    "Handshaking with CRS servers",
+    "Initializing encrypted session",
+  ],
+  flexid: [
+    "Checking LexisNexis records",
+    "Cross-referencing identity data",
+    "Validating personal information",
+    "Running FlexID verification",
+  ],
+  credit: [
+    "Experian, TransUnion, and Equifax",
+    "Requesting tri-bureau data",
+    "Fetching reports from 3 bureaus",
+    "Pulling VantageScore 4.0 data",
+  ],
+  fraud: [
+    "CRS Fraud Finder by AtData",
+    "Scanning for suspicious activity",
+    "Checking fraud risk indicators",
+    "Analyzing identity risk signals",
+  ],
+  green: [
+    "Scoring across 4 factors",
+    "Evaluating credit utilization & history",
+    "Analyzing green investment eligibility",
+    "Computing tier placement",
+  ],
+  gemini: [
+    "Gemini analyzing your profile",
+    "AI building personalized recommendations",
+    "Generating tailored green insights",
+    "Crafting your financial roadmap",
+  ],
+};
+
+function buildInitialSteps(): Omit<LoadingStep, "status">[] {
+  return [
+    { id: "auth", label: "Authenticating with CRS", sublabel: pick(STEP_SUBLABELS.auth), icon: Shield },
+    { id: "flexid", label: "Verifying identity", sublabel: pick(STEP_SUBLABELS.flexid), icon: Fingerprint },
+    { id: "credit", label: "Pulling credit reports", sublabel: pick(STEP_SUBLABELS.credit), icon: Building },
+    { id: "fraud", label: "Running fraud analysis", sublabel: pick(STEP_SUBLABELS.fraud), icon: ScanSearch },
+    { id: "green", label: "Calculating green readiness", sublabel: pick(STEP_SUBLABELS.green), icon: Leaf },
+    { id: "gemini", label: "Generating AI insights", sublabel: pick(STEP_SUBLABELS.gemini), icon: Sparkles },
+  ];
+}
 
 function extractScore(report: Record<string, unknown> | null): number | null {
   if (!report) return null;
@@ -61,7 +106,7 @@ function extractScore(report: Record<string, unknown> | null): number | null {
 export default function LoadingPage() {
   const router = useRouter();
   const [steps, setSteps] = useState<LoadingStep[]>(
-    INITIAL_STEPS.map((s) => ({ ...s, status: "pending" as const }))
+    buildInitialSteps().map((s) => ({ ...s, status: "pending" as const }))
   );
   const [error, setError] = useState<string | null>(null);
   const hasStarted = useRef(false);
@@ -92,10 +137,12 @@ export default function LoadingPage() {
     try {
       // Demo persona: simulated cinematic sequence — match real API pacing
       if (isDemoPersona(form)) {
-        const demoPacing = [1200, 1400, 2000, 800, 900, 1000];
+        const basePacing = [1200, 1400, 2000, 800, 900, 1000];
         for (let i = 0; i < steps.length; i++) {
           setStepStatus(i, "active");
-          await delay(demoPacing[i] + Math.random() * 300);
+          // Randomize timing: ±30% of base + random jitter
+          const jitter = basePacing[i] * (0.7 + Math.random() * 0.6);
+          await delay(jitter + Math.random() * 400);
           setStepStatus(i, "complete");
         }
         const creditReportPayload = getDemoCreditReportResponse();
@@ -384,7 +431,7 @@ export default function LoadingPage() {
       return;
     }
     setError(null);
-    setSteps(INITIAL_STEPS.map((s) => ({ ...s, status: "pending" as const })));
+    setSteps(buildInitialSteps().map((s) => ({ ...s, status: "pending" as const })));
     hasStarted.current = false;
     const form = JSON.parse(raw) as Record<string, string>;
     runPipeline(form);

@@ -55,7 +55,7 @@ export function useVoicePlayback(): UseVoicePlaybackReturn {
       setPlaybackState("loading");
 
       try {
-        const cleaned = stripMarkdown(text).slice(0, 3000);
+        const cleaned = stripMarkdown(text).slice(0, 2000);
         if (!cleaned) {
           setPlaybackState("idle");
           return;
@@ -92,7 +92,6 @@ export function useVoicePlayback(): UseVoicePlaybackReturn {
       } catch (err) {
         console.error("[voice-playback]", err);
         setPlaybackState("error");
-        // Reset to idle after a moment so user can retry
         setTimeout(() => setPlaybackState("idle"), 2000);
       }
     },

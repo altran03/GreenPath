@@ -44,6 +44,16 @@ export default function ReportPage() {
     }
   }, [router]);
 
+  // Auto-trigger print dialog when opened via Export button
+  useEffect(() => {
+    if (!data) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("print") === "1") {
+      const timer = setTimeout(() => window.print(), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [data]);
+
   if (!data) {
     return (
       <div className="min-h-screen flex items-center justify-center">

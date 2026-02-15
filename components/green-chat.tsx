@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Sparkles, User, Loader2, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
+import { Send, Sparkles, User, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,6 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { GreenReadiness } from "@/lib/green-scoring";
 import type { GreenInvestment } from "@/lib/green-investments";
-import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
-import { useVoicePlayback } from "@/hooks/use-voice-playback";
 
 interface Message {
   role: "user" | "assistant";
@@ -49,31 +47,8 @@ export function GreenChat({ greenReadiness, investments, availableSavings, burea
   const [messages, setMessages] = useState<Message[]>(() => loadMessages());
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
-  const [voiceMode, setVoiceMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const prevStreamingRef = useRef(false);
-
-  // Voice hooks
-  const sendMessageRef = useRef<(content: string) => void>(undefined);
-
-  const { playbackState, speak, stop: stopPlayback } = useVoicePlayback();
-
-  const {
-    isListening,
-    transcript,
-    isSupported,
-    startListening,
-    stopListening,
-    resetTranscript,
-  } = useSpeechRecognition({
-    onResult: (finalTranscript) => {
-      if (finalTranscript.trim()) {
-        setInput("");
-        sendMessageRef.current?.(finalTranscript);
-      }
-    },
-  });
 
   // Persist messages to sessionStorage
   useEffect(() => {
@@ -85,24 +60,6 @@ export function GreenChat({ greenReadiness, investments, availableSavings, burea
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
-
-  // Show live transcript in input while listening
-  useEffect(() => {
-    if (isListening && transcript) {
-      setInput(transcript);
-    }
-  }, [isListening, transcript]);
-
-  // Auto-speak AI response when streaming finishes and voice mode is on
-  useEffect(() => {
-    if (prevStreamingRef.current && !streaming && voiceMode) {
-      const lastMsg = messages[messages.length - 1];
-      if (lastMsg?.role === "assistant" && lastMsg.content && !lastMsg.content.startsWith("\u26A0\uFE0F")) {
-        speak(lastMsg.content);
-      }
-    }
-    prevStreamingRef.current = streaming;
-  }, [streaming, voiceMode, messages, speak]);
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || streaming) return;
@@ -182,9 +139,6 @@ export function GreenChat({ greenReadiness, investments, availableSavings, burea
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, streaming, greenReadiness, investments, availableSavings, bureauScores, flexIdVerified, fraudRiskLevel]);
 
-  // Keep ref in sync for speech recognition callback
-  sendMessageRef.current = sendMessage;
-
   const chatBody = (
     <>
       {/* Messages */}
@@ -258,42 +212,6 @@ export function GreenChat({ greenReadiness, investments, availableSavings, burea
         </div>
       </ScrollArea>
 
-      {/* Speaking / listening status bar */}
-      {(isListening || playbackState === "playing" || playbackState === "loading") && (
-        <div className="px-5 py-2 border-t border-dew/40 flex items-center justify-center gap-2 shrink-0">
-          {isListening && (
-            <>
-              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-xs text-red-600 font-medium">Listening...</span>
-              <span className="text-xs text-red-400 truncate max-w-[150px]">{transcript || "Speak now"}</span>
-            </>
-          )}
-          {playbackState === "playing" && (
-            <>
-              <div className="flex items-end gap-[2px] h-3 animate-speaker-pulse">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div
-                    key={i}
-                    className="w-[3px] bg-canopy rounded-full"
-                    style={{ height: `${4 + Math.random() * 8}px` }}
-                  />
-                ))}
-              </div>
-              <span className="text-xs text-canopy">Speaking...</span>
-              <button type="button" onClick={stopPlayback} className="text-stone hover:text-grove">
-                <VolumeX className="w-3 h-3" />
-              </button>
-            </>
-          )}
-          {playbackState === "loading" && (
-            <>
-              <Loader2 className="w-3 h-3 animate-spin text-stone" />
-              <span className="text-xs text-stone">Generating speech...</span>
-            </>
-          )}
-        </div>
-      )}
-
       {/* Input */}
       <div className="px-5 py-4 border-t border-dew/40 bg-dawn/30 shrink-0">
         <form
@@ -301,58 +219,20 @@ export function GreenChat({ greenReadiness, investments, availableSavings, burea
             e.preventDefault();
             sendMessage(input);
           }}
-          className="flex items-center gap-2"
+          className="flex gap-2"
         >
-          {/* Mic button — toggles voice mode, or starts/stops listening */}
-          <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              onClick={() => {
-                if (!voiceMode) {
-                  // Turn on voice mode and start listening
-                  setVoiceMode(true);
-                  resetTranscript();
-                  startListening();
-                } else if (isListening) {
-                  stopListening();
-                } else {
-                  stopPlayback();
-                  resetTranscript();
-                  startListening();
-                }
-              }}
-              disabled={streaming}
-              className={`rounded-xl shrink-0 transition-all ${
-                isListening
-                  ? "bg-red-100 text-red-600 animate-mic-pulse"
-                  : voiceMode
-                  ? "bg-grove/10 text-grove"
-                  : "text-stone hover:bg-dawn hover:text-grove"
-              }`}
-              aria-label={isListening ? "Stop listening" : "Speak your question"}
-            >
-              {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-            </Button>
-
           <Input
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={
-              isListening
-                ? "Listening..."
-                : "Ask about green investments, tax credits, financing..."
-            }
-            className={`rounded-xl border-dew/60 focus:border-canopy bg-white ${
-              isListening ? "border-red-300 bg-red-50/30" : ""
-            }`}
-            disabled={streaming || isListening}
+            placeholder="Ask about green investments, tax credits, financing..."
+            className="rounded-xl border-dew/60 focus:border-canopy bg-white"
+            disabled={streaming}
           />
           <Button
             type="submit"
             size="icon"
-            disabled={streaming || !input.trim() || isListening}
+            disabled={streaming || !input.trim()}
             className="rounded-xl bg-grove hover:bg-grove-light shrink-0"
           >
             <Send className="w-4 h-4" />
