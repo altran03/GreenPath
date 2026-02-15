@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles, ChevronDown, ChevronUp, TrendingUp, Lightbulb } from "lucide-react";
+import { Sparkles, ChevronDown, TrendingUp, Lightbulb } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useState } from "react";
 import type { GeminiAnalysis } from "@/lib/gemini";
@@ -75,22 +75,27 @@ export function GeminiInsights({ analysis }: GeminiInsightsProps) {
               onClick={() => setExpanded(!expanded)}
               className="flex items-center gap-2 text-sm font-medium text-canopy hover:text-grove transition-colors"
             >
-              {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${expanded ? "rotate-180" : ""}`} />
               {expanded ? "Hide" : "Show"} personalized investment insights ({analysis.investmentInsights.length})
             </button>
-            {expanded && (
-              <div className="mt-3 space-y-2 animate-fade-in">
-                {analysis.investmentInsights.map((insight, i) => (
-                  <div
-                    key={i}
-                    className="p-3 rounded-lg bg-white border border-dew/40 text-sm text-soil"
-                  >
-                    <span className="font-medium text-grove">{insight.investmentId}:</span>{" "}
-                    {insight.insight}
-                  </div>
-                ))}
+            <div
+              className="grid transition-[grid-template-rows] duration-300 ease-out"
+              style={{ gridTemplateRows: expanded ? "1fr" : "0fr" }}
+            >
+              <div className="overflow-hidden">
+                <div className={`mt-3 space-y-2 transition-opacity duration-300 ${expanded ? "opacity-100" : "opacity-0"}`}>
+                  {analysis.investmentInsights.map((insight, i) => (
+                    <div
+                      key={i}
+                      className="p-3 rounded-lg bg-white border border-dew/40 text-sm text-soil"
+                    >
+                      <span className="font-medium text-grove">{insight.investmentId}:</span>{" "}
+                      {insight.insight}
+                    </div>
+                  ))}
+                </div>
               </div>
-            )}
+            </div>
           </div>
         )}
 

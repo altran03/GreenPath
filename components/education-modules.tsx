@@ -279,46 +279,51 @@ export function EducationModules({
                   }`} />
                 </button>
 
-                {/* Expanded content */}
-                {isExpanded && (
-                  <div className="px-5 pb-5 space-y-4 animate-fade-up">
-                    {/* Highlight stat */}
-                    <div className="px-4 py-3 rounded-xl bg-grove/5 border border-dew/40">
-                      <p className="text-sm font-medium text-grove">{lesson.highlight}</p>
-                    </div>
-
-                    {/* Content */}
-                    <p className="text-sm text-soil/80 leading-relaxed">
-                      {lesson.content}
-                    </p>
-
-                    {/* Action item */}
-                    <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-sunbeam/8 border border-sunbeam/20">
-                      <Target className="w-4 h-4 text-sunbeam mt-0.5 shrink-0" />
-                      <div>
-                        <p className="text-xs font-medium text-sunbeam uppercase tracking-wider mb-1">
-                          Action Item
-                        </p>
-                        <p className="text-sm text-soil/80 leading-relaxed">
-                          {lesson.actionItem}
-                        </p>
+                {/* Expanded content — smooth dropdown via grid rows */}
+                <div
+                  className="grid transition-[grid-template-rows] duration-300 ease-out"
+                  style={{ gridTemplateRows: isExpanded ? "1fr" : "0fr" }}
+                >
+                  <div className="overflow-hidden">
+                    <div className={`px-5 pb-5 space-y-4 transition-opacity duration-300 ${isExpanded ? "opacity-100" : "opacity-0"}`}>
+                      {/* Highlight stat */}
+                      <div className="px-4 py-3 rounded-xl bg-grove/5 border border-dew/40">
+                        <p className="text-sm font-medium text-grove">{lesson.highlight}</p>
                       </div>
-                    </div>
 
-                    {/* Mark as complete */}
-                    <button
-                      onClick={() => toggleComplete(lesson.id)}
-                      className={`flex items-center gap-2 text-sm font-medium transition-colors ${
-                        isDone
-                          ? "text-canopy hover:text-canopy/70"
-                          : "text-stone hover:text-grove"
-                      }`}
-                    >
-                      <CheckCircle2 className={`w-4 h-4 ${isDone ? "text-canopy" : "text-stone/40"}`} />
-                      {isDone ? "Completed" : "Mark as read"}
-                    </button>
+                      {/* Content */}
+                      <p className="text-sm text-soil/80 leading-relaxed">
+                        {lesson.content}
+                      </p>
+
+                      {/* Action item */}
+                      <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-sunbeam/8 border border-sunbeam/20">
+                        <Target className="w-4 h-4 text-sunbeam mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-xs font-medium text-sunbeam uppercase tracking-wider mb-1">
+                            Action Item
+                          </p>
+                          <p className="text-sm text-soil/80 leading-relaxed">
+                            {lesson.actionItem}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Mark as complete */}
+                      <button
+                        onClick={() => toggleComplete(lesson.id)}
+                        className={`flex items-center gap-2 text-sm font-medium transition-colors ${
+                          isDone
+                            ? "text-canopy hover:text-canopy/70"
+                            : "text-stone hover:text-grove"
+                        }`}
+                      >
+                        <CheckCircle2 className={`w-4 h-4 ${isDone ? "text-canopy" : "text-stone/40"}`} />
+                        {isDone ? "Completed" : "Mark as read"}
+                      </button>
+                    </div>
                   </div>
-                )}
+                </div>
               </CardContent>
             </Card>
           );

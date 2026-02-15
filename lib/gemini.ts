@@ -35,7 +35,14 @@ const ANALYSIS_SYSTEM_PROMPT = `You are GreenPath AI, a friendly financial and e
 3. If their tier is C or D, provide 2-3 specific, actionable credit improvement tips that would help them unlock higher-tier green investments. Be specific with numbers (e.g., "Paying down $X of your revolving balance would drop your utilization to Y%").
 4. Calculate and state the total potential environmental impact if they adopted all recommended actions.
 
-IMPORTANT — Tri-bureau data: When "bureauScores" is provided (Experian, TransUnion, Equifax), you MUST take all three bureaus into account. Mention their range of scores (e.g. "Your scores range from 680 to 720 across bureaus"). If there is a significant spread (e.g. 30+ points), note that lenders may pull from any bureau and suggest they shop around for the best rate. If only one bureau has a score, base your summary on that; if two or three have scores, reference the picture across all of them — don't speak as if only one bureau exists.
+IMPORTANT — Tri-bureau data: When "bureauScores" is provided (Experian, TransUnion, Equifax), you MUST take all three bureaus into account. Mention their range of scores (e.g. "Your scores range from 665 to 695 across bureaus"). If there is a significant spread (e.g. 30+ points), note that lenders may pull from any bureau and suggest they shop around for the best rate.
+
+IMPORTANT — Tradeline profile: When "tradelineProfile" is provided, reference specific accounts:
+- If they have high-utilization cards, mention them by name (e.g. "Your Chase Visa is at 85% utilization — paying down $X would drop it to Y%")
+- If they have an auto loan, reference it when discussing EV options (e.g. "You already have a car payment — switching to an EV could save $1,500+/yr in fuel")
+- If they have no mortgage (isRenter: true), focus on renter-friendly options and flag homeowner-only investments
+- Reference their monthly debt payment load when discussing affordability
+- Mention federal incentives where applicable (30% solar ITC, $7,500 EV credit, $2,000 heat pump credit)
 
 Keep the tone optimistic, informative, and actionable. Use plain language — no jargon. Format your response as JSON with this structure:
 {
@@ -55,7 +62,8 @@ export interface GeminiAnalysis {
 export async function analyzeGreenReadiness(
   greenReadiness: GreenReadiness,
   recommendedInvestments: GreenInvestment[],
-  bureauScores?: Record<string, number | null> | null
+  bureauScores?: Record<string, number | null> | null,
+  tradelineProfile?: Record<string, unknown> | null
 ): Promise<GeminiAnalysis> {
   const payload: Record<string, unknown> = {
     greenReadiness: {
@@ -92,6 +100,10 @@ export async function analyzeGreenReadiness(
         scoreSpread: values.length >= 2 ? Math.max(...values) - Math.min(...values) : 0,
       };
     }
+  }
+
+  if (tradelineProfile) {
+    payload.tradelineProfile = tradelineProfile;
   }
 
   const userMessage = JSON.stringify(payload, null, 2);
@@ -258,4 +270,88 @@ export async function* streamChat(
       }
     }
   }
+}
+
+// ── Quiz Generation ──
+
+export interface QuizQuestion {
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+}
+
+const QUIZ_SYSTEM_PROMPT = `You are GreenPath AI, generating a short quiz for a credit & green finance education module. You have the user's REAL credit data — use it to create personalized questions with their actual numbers.
+
+RULES:
+- Generate exactly 3 multiple-choice questions
+- Each question has exactly 4 options (A-D)
+- Questions MUST reference the user's actual data (their credit score, utilization %, card names, balances, tier, etc.)
+- Mix question types: 1 factual recall, 1 applied/calculation, 1 scenario-based
+- Keep questions concise (1-2 sentences max)
+- Explanations should be 1-2 sentences and educational
+- Make wrong answers plausible but clearly wrong to someone who read the module
+
+Return ONLY valid JSON with this exact structure:
+{
+  "questions": [
+    {
+      "question": "string",
+      "options": ["A answer", "B answer", "C answer", "D answer"],
+      "correctIndex": 0,
+      "explanation": "string"
+    }
+  ]
+}`;
+
+export async function generateQuiz(
+  moduleTitle: string,
+  moduleContent: string,
+  userProfile: Record<string, unknown>
+): Promise<QuizQuestion[]> {
+  const userMessage = JSON.stringify({
+    moduleTitle,
+    moduleContent,
+    userProfile,
+  }, null, 2);
+
+  const res = await withRetry(async () => {
+    const r = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getApiKey()}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: "system", content: QUIZ_SYSTEM_PROMPT },
+          { role: "user", content: userMessage },
+        ],
+        response_format: { type: "json_object" },
+      }),
+    });
+    if (!r.ok) {
+      const errText = await r.text();
+      throw new Error(`OpenRouter ${r.status}: ${errText}`);
+    }
+    return r.json();
+  });
+
+  const text = res.choices?.[0]?.message?.content || "";
+  try {
+    const parsed = JSON.parse(text) as { questions: QuizQuestion[] };
+    // Validate structure
+    if (Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+      return parsed.questions.map((q) => ({
+        question: q.question || "",
+        options: Array.isArray(q.options) ? q.options.slice(0, 4) : [],
+        correctIndex: typeof q.correctIndex === "number" ? q.correctIndex : 0,
+        explanation: q.explanation || "",
+      }));
+    }
+  } catch {
+    // fallback
+  }
+  return [];
 }

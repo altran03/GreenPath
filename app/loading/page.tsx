@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { extractCreditData, calculateGreenReadiness } from "@/lib/green-scoring";
 import { getRecommendedInvestments } from "@/lib/green-investments";
+import { extractTradelineProfile, personalizeInvestments, getBureauLendingTip } from "@/lib/tradeline-intelligence";
 import {
   isDemoPersona,
   getDemoTriBureau,
@@ -103,8 +104,17 @@ export default function LoadingPage() {
         const creditData = extractCreditData(primaryReport as Record<string, unknown>);
         const greenReadiness = calculateGreenReadiness(creditData);
         const investments = getRecommendedInvestments(greenReadiness.tier);
-        const bureauScores = { experian: 680, transunion: 680, equifax: 680 };
+        const bureauScores = {
+          experian: extractScore(triBureau.experian as Record<string, unknown>),
+          transunion: extractScore(triBureau.transunion as Record<string, unknown>),
+          equifax: extractScore(triBureau.equifax as Record<string, unknown>),
+        };
         const savings = form.availableSavings ? parseFloat(form.availableSavings) : null;
+
+        // Tradeline intelligence
+        const tradelineProfile = extractTradelineProfile(primaryReport as Record<string, unknown>);
+        const personalizedInvestments = personalizeInvestments(investments, tradelineProfile, greenReadiness.tier);
+        const bureauTip = getBureauLendingTip(bureauScores);
 
         // Call Gemini analysis for demo too
         let geminiAnalysis = null;
@@ -112,7 +122,7 @@ export default function LoadingPage() {
           const analysisRes = await fetch("/api/green-analysis", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ greenReadiness, recommendedInvestments: investments, bureauScores }),
+            body: JSON.stringify({ greenReadiness, recommendedInvestments: investments, bureauScores, tradelineProfile }),
           });
           if (analysisRes.ok) {
             geminiAnalysis = await analysisRes.json();
@@ -128,6 +138,9 @@ export default function LoadingPage() {
           creditReport: primaryReport,
           greenReadiness,
           investments,
+          personalizedInvestments,
+          tradelineProfile,
+          bureauTip,
           geminiAnalysis,
           availableSavings: savings,
           bureauScores,
@@ -294,6 +307,11 @@ export default function LoadingPage() {
       const creditData = extractCreditData(displayReport);
       const greenReadiness = calculateGreenReadiness(creditData);
       const investments = getRecommendedInvestments(greenReadiness.tier);
+
+      // Tradeline intelligence
+      const tradelineProfile = extractTradelineProfile(displayReport);
+      const personalizedInvestments = personalizeInvestments(investments, tradelineProfile, greenReadiness.tier);
+      const bureauTip = getBureauLendingTip(bureauScores);
       setStepStatus(4, "complete");
 
       // Step 6: Gemini analysis (naturally slow — no padding)
@@ -304,7 +322,7 @@ export default function LoadingPage() {
           const analysisRes = await fetch("/api/green-analysis", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ greenReadiness, recommendedInvestments: investments, bureauScores }),
+            body: JSON.stringify({ greenReadiness, recommendedInvestments: investments, bureauScores, tradelineProfile }),
           });
           if (analysisRes.ok) {
             geminiAnalysis = await analysisRes.json();
@@ -325,6 +343,9 @@ export default function LoadingPage() {
         creditReport: displayReport,
         greenReadiness,
         investments,
+        personalizedInvestments,
+        tradelineProfile,
+        bureauTip,
         geminiAnalysis,
         availableSavings: savings,
         bureauScores,

@@ -12,6 +12,7 @@ export async function POST(request: NextRequest) {
       greenReadiness: GreenReadiness;
       recommendedInvestments: GreenInvestment[];
       bureauScores?: Record<string, number | null> | null;
+      tradelineProfile?: Record<string, unknown> | null;
     };
 
     if (!body.greenReadiness || !body.recommendedInvestments) {
@@ -34,7 +35,8 @@ export async function POST(request: NextRequest) {
     const analysis = await analyzeGreenReadiness(
       body.greenReadiness,
       body.recommendedInvestments,
-      body.bureauScores ?? null
+      body.bureauScores ?? null,
+      body.tradelineProfile ?? null
     );
     console.log("[green-analysis] Gemini analysis complete");
 

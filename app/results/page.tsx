@@ -27,8 +27,10 @@ import { VerificationBadges } from "@/components/verification-badges";
 import { AnomalyBanner } from "@/components/anomaly-banner";
 import { DataQualityReport } from "@/components/data-quality-report";
 import { DuplicateAccounts } from "@/components/duplicate-accounts";
-import { EducationModules } from "@/components/education-modules";
+import { StudyPlan } from "@/components/study-plan";
 import { ChatFAB } from "@/components/chat-fab";
+import { CreditSimulator } from "@/components/credit-simulator";
+import { getTierLabel, getEstimatedRate } from "@/lib/utils";
 import { detectAnomalies, type AnomalyReport } from "@/lib/anomaly-detection";
 import { runDataQualityReport, type DataQualityReport as DataQualityReportType } from "@/lib/data-quality";
 import { detectDuplicateTradelines, type DuplicateGroup } from "@/lib/duplicate-tradelines";
@@ -43,12 +45,17 @@ import {
 import type { GreenReadiness } from "@/lib/green-scoring";
 import type { GreenInvestment } from "@/lib/green-investments";
 import type { GeminiAnalysis } from "@/lib/gemini";
+import type { PersonalizedInvestment, TradelineProfile, BureauTip } from "@/lib/tradeline-intelligence";
+import { extractTradelineProfile, personalizeInvestments, getBureauLendingTip } from "@/lib/tradeline-intelligence";
 
 interface ResultsData {
   userName: string;
   creditReport: Record<string, unknown>;
   greenReadiness: GreenReadiness;
   investments: GreenInvestment[];
+  personalizedInvestments?: PersonalizedInvestment[];
+  tradelineProfile?: TradelineProfile;
+  bureauTip?: BureauTip | null;
   geminiAnalysis: GeminiAnalysis | null;
   availableSavings: number | null;
   bureauScores?: Record<string, number | null>;
@@ -69,6 +76,7 @@ export default function ResultsPage() {
   const [activeTab, setActiveTab] = useState("profile");
   const [showAllActions, setShowAllActions] = useState(false);
   const [showImpact, setShowImpact] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const stored = sessionStorage.getItem("greenpath-results");
@@ -140,16 +148,42 @@ export default function ResultsPage() {
         const creditData = extractCreditData(displayReport);
         const greenReadiness = calculateGreenReadiness(creditData);
         const investments = getRecommendedInvestments(greenReadiness.tier);
-        const bureauScores = { experian: 680, transunion: 680, equifax: 680 };
+        const bureauScores = {
+          experian: extractScore(resolvedTriBureau.experian),
+          transunion: extractScore(resolvedTriBureau.transunion),
+          equifax: extractScore(resolvedTriBureau.equifax),
+        };
         const flexIdResult = getDemoFlexIdCorrected();
         const fraudRes = getDemoFraudResult();
         const savings = correctedForm.availableSavings ? parseFloat(correctedForm.availableSavings) : null;
+
+        // Tradeline intelligence
+        const tradelineProfile = extractTradelineProfile(displayReport);
+        const personalizedInvestments = personalizeInvestments(investments, tradelineProfile, greenReadiness.tier);
+        const bureauTip = getBureauLendingTip(bureauScores);
+
+        // Call Gemini analysis for demo too
+        let geminiAnalysis = null;
+        try {
+          const analysisRes = await fetch("/api/green-analysis", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ greenReadiness, recommendedInvestments: investments, bureauScores, tradelineProfile }),
+          });
+          if (analysisRes.ok) geminiAnalysis = await analysisRes.json();
+        } catch {
+          /* non-fatal */
+        }
+
         const newResults: ResultsData = {
           userName: `${correctedForm.firstName} ${correctedForm.lastName}`,
           creditReport: displayReport,
           greenReadiness,
           investments,
-          geminiAnalysis: null,
+          personalizedInvestments,
+          tradelineProfile,
+          bureauTip,
+          geminiAnalysis,
           availableSavings: savings,
           bureauScores,
           triBureau: resolvedTriBureau,
@@ -277,13 +311,18 @@ export default function ResultsPage() {
       const investments = getRecommendedInvestments(greenReadiness.tier);
       const primaryReport = displayReport;
 
+      // Tradeline intelligence
+      const tradelineProfile = extractTradelineProfile(primaryReport);
+      const personalizedInvestments = personalizeInvestments(investments, tradelineProfile, greenReadiness.tier);
+      const bureauTip = getBureauLendingTip(bureauScores);
+
       // Gemini re-analysis
       let geminiAnalysis = null;
       try {
         const analysisRes = await fetch("/api/green-analysis", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ greenReadiness, recommendedInvestments: investments, bureauScores }),
+          body: JSON.stringify({ greenReadiness, recommendedInvestments: investments, bureauScores, tradelineProfile }),
         });
         if (analysisRes.ok) geminiAnalysis = await analysisRes.json();
       } catch {
@@ -296,6 +335,9 @@ export default function ResultsPage() {
         creditReport: primaryReport,
         greenReadiness,
         investments,
+        personalizedInvestments,
+        tradelineProfile,
+        bureauTip,
         geminiAnalysis,
         availableSavings: savings,
         bureauScores,
@@ -394,11 +436,37 @@ export default function ResultsPage() {
             </Link>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="rounded-lg border-dew/60 text-grove gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-lg border-dew/60 text-grove gap-1.5"
+              onClick={() => {
+                const summary = [
+                  `GreenPath Report for ${data.userName}`,
+                  `Green Readiness: ${data.greenReadiness.score}/100 (Tier ${data.greenReadiness.tier} — ${getTierLabel(data.greenReadiness.tier)})`,
+                  `Credit Score: ${data.greenReadiness.creditScore}`,
+                  `Utilization: ${(data.greenReadiness.utilization * 100).toFixed(0)}%`,
+                  `${data.investments.length} green investments available`,
+                  `Estimated APR: ${getEstimatedRate(data.greenReadiness.tier)}%`,
+                  ``,
+                  `Check your own green readiness at GreenPath!`,
+                  `Built for SF Hacks 2026 — Powered by CRS Credit API`,
+                ].join("\n");
+                navigator.clipboard.writeText(summary).then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                });
+              }}
+            >
               <Share2 className="w-3.5 h-3.5" />
-              Share
+              {copied ? "Copied!" : "Share"}
             </Button>
-            <Button variant="outline" size="sm" className="rounded-lg border-dew/60 text-grove gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-lg border-dew/60 text-grove gap-1.5"
+              onClick={() => window.open("/report", "_blank")}
+            >
               <Download className="w-3.5 h-3.5" />
               Export
             </Button>
@@ -483,6 +551,15 @@ export default function ResultsPage() {
                 {data.bureauScores && data.triBureau && (
                   <BureauComparison bureauScores={data.bureauScores} triBureau={data.triBureau} />
                 )}
+                {data.bureauTip && (
+                  <div className="p-4 rounded-xl bg-canopy/5 border border-canopy/20 text-sm text-grove flex items-start gap-3">
+                    <Shield className="w-5 h-5 text-canopy shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-grove">Lending Tip:</strong>{" "}
+                      {data.bureauTip.tip}
+                    </div>
+                  </div>
+                )}
               </section>
             )}
 
@@ -508,21 +585,21 @@ export default function ResultsPage() {
 
           {/* ─── Learn Tab ─── */}
           <TabsContent value="learn" className="mt-0">
-            <div className="max-w-3xl mx-auto">
-              <EducationModules
-                greenReadiness={data.greenReadiness}
-                geminiAnalysis={data.geminiAnalysis}
-                bureauScores={data.bureauScores || {}}
-                investments={data.investments}
-              />
-            </div>
+            <StudyPlan
+              greenReadiness={data.greenReadiness}
+              geminiAnalysis={data.geminiAnalysis}
+              bureauScores={data.bureauScores || {}}
+              investments={data.investments}
+              tradelineProfile={data.tradelineProfile}
+              personalizedInvestments={data.personalizedInvestments}
+            />
           </TabsContent>
 
           {/* ─── Green Plan Tab ─── */}
           <TabsContent value="plan" className="space-y-6 mt-0">
             {/* Score + AI Overview — side by side on desktop */}
             <section className="animate-fade-up">
-              <div className="flex flex-col lg:flex-row items-center gap-6">
+              <div className="flex flex-col lg:flex-row items-start gap-6">
                 {/* Left: Gauge */}
                 <div className="flex flex-col items-center shrink-0 mx-auto lg:mx-0">
                   <GreenScoreGauge key={activeTab} score={data.greenReadiness.score} tier={data.greenReadiness.tier} />
@@ -542,8 +619,16 @@ export default function ResultsPage() {
               </div>
             </section>
 
-            {/* Green Action Plan — capped at 6, expandable */}
+            {/* Credit Simulator — What-If Tool */}
             <section className="animate-fade-up delay-100">
+              <CreditSimulator
+                greenReadiness={data.greenReadiness}
+                investments={data.investments}
+              />
+            </section>
+
+            {/* Green Action Plan — capped at 6, expandable */}
+            <section className="animate-fade-up delay-200">
               <h2 className="font-heading text-xl text-grove mb-1">
                 Your Green Action Plan
               </h2>
@@ -552,8 +637,14 @@ export default function ResultsPage() {
               </p>
               <ActionCards
                 investments={showAllActions ? data.investments : data.investments.slice(0, 6)}
+                personalizedInvestments={
+                  showAllActions
+                    ? data.personalizedInvestments
+                    : data.personalizedInvestments?.slice(0, 6)
+                }
                 geminiAnalysis={data.geminiAnalysis}
                 availableSavings={data.availableSavings}
+                tier={data.greenReadiness.tier}
               />
               {data.investments.length > 6 && !showAllActions && (
                 <button
@@ -632,7 +723,7 @@ export default function ResultsPage() {
             <Leaf className="w-4 h-4 text-canopy" />
             <span>GreenPath — Built for SF Hacks 2026</span>
           </div>
-          <p>Powered by CRS Credit API ({crsProductsUsed.length} products) &amp; Google Gemini</p>
+          <p>Powered by CRS Credit API ({crsProductsUsed.length} products) &amp; Gemini via OpenRouter</p>
         </div>
       </footer>
     </div>

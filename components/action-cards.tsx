@@ -4,7 +4,7 @@ import { useState } from "react";
 import {
   Sun, Car, Battery, Home, CarFront, Thermometer, Refrigerator,
   Gauge, Bike, Wind, Users, Lightbulb, Bus, ClipboardCheck, Sprout, Landmark,
-  TreePine, DollarSign, ChevronDown, Wallet, CreditCard,
+  TreePine, DollarSign, ChevronDown, Wallet, CreditCard, BadgeDollarSign, Sparkles,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import {
 } from "@/lib/green-investments";
 import { formatCurrency, co2ToTrees } from "@/lib/utils";
 import type { GeminiAnalysis } from "@/lib/gemini";
+import type { PersonalizedInvestment } from "@/lib/tradeline-intelligence";
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Sun, Car, Battery, Home, CarFront, Thermometer, Refrigerator,
@@ -23,11 +24,13 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
 
 interface ActionCardsProps {
   investments: GreenInvestment[];
+  personalizedInvestments?: PersonalizedInvestment[];
   geminiAnalysis: GeminiAnalysis | null;
   availableSavings?: number | null;
+  tier?: "A" | "B" | "C" | "D";
 }
 
-export function ActionCards({ investments, geminiAnalysis, availableSavings }: ActionCardsProps) {
+export function ActionCards({ investments, personalizedInvestments, geminiAnalysis, availableSavings }: ActionCardsProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const getInsight = (id: string) => {
@@ -35,11 +38,16 @@ export function ActionCards({ investments, geminiAnalysis, availableSavings }: A
     return geminiAnalysis.investmentInsights.find((i) => i.investmentId === id);
   };
 
+  const getPersonalized = (id: string): PersonalizedInvestment | undefined => {
+    return personalizedInvestments?.find((p) => p.investment.id === id);
+  };
+
   return (
     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {investments.map((inv, i) => {
         const Icon = iconMap[inv.icon] || Lightbulb;
         const insight = getInsight(inv.id);
+        const personalized = getPersonalized(inv.id);
         const isExpanded = expandedId === inv.id;
         const trees = co2ToTrees(inv.annualCO2ReductionLbs);
 
@@ -62,14 +70,36 @@ export function ActionCards({ investments, geminiAnalysis, availableSavings }: A
                 </div>
 
                 <h3 className="font-semibold text-grove text-lg mb-1">{inv.name}</h3>
-                <p className="text-sm text-stone leading-relaxed mb-4">{inv.description}</p>
+                <p className="text-sm text-stone leading-relaxed mb-3">{inv.description}</p>
+
+                {/* Match Reason */}
+                {personalized?.matchReason && (
+                  <div className="mb-3 p-2.5 rounded-lg bg-canopy/5 border border-canopy/15 text-xs text-grove-light leading-relaxed">
+                    <span className="font-medium text-canopy">Why this fits you:</span>{" "}
+                    {personalized.matchReason}
+                  </div>
+                )}
+
+                {/* Federal Incentive */}
+                {personalized && personalized.federalIncentive > 0 && (
+                  <div className="mb-3 flex items-center gap-1.5 text-canopy">
+                    <BadgeDollarSign className="w-3.5 h-3.5 shrink-0" />
+                    <span className="text-xs font-medium">
+                      {formatCurrency(inv.estimatedCost)} → {formatCurrency(personalized.effectiveCost)} after {personalized.incentiveLabel}
+                    </span>
+                  </div>
+                )}
 
                 {/* Stats */}
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center gap-1.5">
                     <DollarSign className="w-3.5 h-3.5 text-canopy" />
                     <span className="text-soil">
-                      {inv.estimatedCost === 0 ? "Free" : formatCurrency(inv.estimatedCost)}
+                      {inv.estimatedCost === 0
+                        ? "Free"
+                        : personalized && personalized.federalIncentive > 0
+                          ? formatCurrency(personalized.effectiveCost)
+                          : formatCurrency(inv.estimatedCost)}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -109,7 +139,8 @@ export function ActionCards({ investments, geminiAnalysis, availableSavings }: A
                 {/* Gemini insight */}
                 {insight && (
                   <div className="mt-3 p-3 rounded-lg bg-dawn/60 border border-dew/30 text-xs text-grove-light leading-relaxed">
-                    ✨ {insight.insight}
+                    <Sparkles className="w-3 h-3 inline mr-1 text-canopy" />
+                    {insight.insight}
                   </div>
                 )}
               </div>
@@ -128,9 +159,11 @@ export function ActionCards({ investments, geminiAnalysis, availableSavings }: A
                 <div className="px-5 pb-5 animate-fade-in text-sm text-soil leading-relaxed border-t border-dew/20">
                   <p className="pt-3">{inv.longDescription}</p>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-stone">
-                    {inv.estimatedMonthlyPayment > 0 && (
+                    {personalized && personalized.dynamicMonthlyPayment > 0 ? (
+                      <div>Monthly at your rate: ~{formatCurrency(personalized.dynamicMonthlyPayment)}</div>
+                    ) : inv.estimatedMonthlyPayment > 0 ? (
                       <div>Monthly: ~{formatCurrency(inv.estimatedMonthlyPayment)}</div>
-                    )}
+                    ) : null}
                     {inv.roiYears > 0 && <div>Break-even: {inv.roiYears} yrs</div>}
                     <div>CO₂ saved: {inv.annualCO2ReductionLbs.toLocaleString()} lbs/yr</div>
                     <div>Difficulty: {inv.difficulty}</div>
