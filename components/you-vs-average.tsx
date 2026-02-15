@@ -92,7 +92,7 @@ export function YouVsAverage({ greenReadiness, investments }: YouVsAverageProps)
       format: (v) => `${formatNumber(Math.round(v))} lbs/yr`,
     },
     {
-      label: "Green Savings",
+      label: "Potential Green Savings",
       userValue: totalGreenSavings,
       avgValue: NATIONAL_AVG.greenSavings,
       scaleMax: Math.max(totalGreenSavings, 1),

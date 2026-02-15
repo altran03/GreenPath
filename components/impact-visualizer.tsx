@@ -145,7 +145,7 @@ export function ImpactVisualizer({ investments }: ImpactVisualizerProps) {
           <Sprout className="w-5 h-5 text-canopy" />
         </div>
         <h3 className="font-heading text-xl text-grove font-semibold">
-          Your Green Impact
+          Your Potential Green Impact
         </h3>
       </div>
 
