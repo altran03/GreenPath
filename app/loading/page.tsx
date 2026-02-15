@@ -102,14 +102,14 @@ export default function LoadingPage() {
         const triBureau = getDemoTriBureau();
         const primaryReport = triBureau.experian ?? creditReportPayload;
         const creditData = extractCreditData(primaryReport as Record<string, unknown>);
-        const greenReadiness = calculateGreenReadiness(creditData);
+        const savings = form.availableSavings ? parseFloat(form.availableSavings) : null;
+        const greenReadiness = calculateGreenReadiness(creditData, savings);
         const investments = getRecommendedInvestments(greenReadiness.tier);
         const bureauScores = {
           experian: extractScore(triBureau.experian as Record<string, unknown>),
           transunion: extractScore(triBureau.transunion as Record<string, unknown>),
           equifax: extractScore(triBureau.equifax as Record<string, unknown>),
         };
-        const savings = form.availableSavings ? parseFloat(form.availableSavings) : null;
 
         // Tradeline intelligence
         const tradelineProfile = extractTradelineProfile(primaryReport as Record<string, unknown>);
@@ -305,7 +305,8 @@ export default function LoadingPage() {
       const displayReport =
         minEntry?.report ?? triBureau.experian ?? triBureau.transunion ?? triBureau.equifax ?? creditReport;
       const creditData = extractCreditData(displayReport);
-      const greenReadiness = calculateGreenReadiness(creditData);
+      const savings = form.availableSavings ? parseFloat(form.availableSavings) : null;
+      const greenReadiness = calculateGreenReadiness(creditData, savings);
       const investments = getRecommendedInvestments(greenReadiness.tier);
 
       // Tradeline intelligence
@@ -337,7 +338,6 @@ export default function LoadingPage() {
       setStepStatus(5, "complete");
 
       // Store results and navigate
-      const savings = form.availableSavings ? parseFloat(form.availableSavings) : null;
       const results = {
         userName: `${form.firstName} ${form.lastName}`,
         creditReport: displayReport,

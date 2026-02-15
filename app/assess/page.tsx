@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { isDemoPersona } from "@/lib/demo-persona";
 
 const US_STATES = [
   "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS",
@@ -232,7 +233,7 @@ export default function AssessPage() {
       postalCode: persona.postalCode,
       phone: "phone" in persona && (persona as Record<string, unknown>).phone ? String((persona as Record<string, unknown>).phone) : "5031234567",
       email: "email" in persona && (persona as Record<string, unknown>).email ? String((persona as Record<string, unknown>).email) : "example@atdata.com",
-      availableSavings: "15000",
+      availableSavings: isDemoPersona({ firstName: persona.firstName, lastName: persona.lastName, ssn: persona.ssn }) ? "15000" : "",
     });
     setTestMenuOpen(false);
   }

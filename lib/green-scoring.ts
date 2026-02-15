@@ -23,7 +23,10 @@ export interface CreditData {
   tradelineCount: number;
 }
 
-export function calculateGreenReadiness(creditData: CreditData): GreenReadiness {
+export function calculateGreenReadiness(
+  creditData: CreditData,
+  availableSavings?: number | null
+): GreenReadiness {
   const {
     creditScore,
     utilization,
@@ -178,7 +181,42 @@ export function calculateGreenReadiness(creditData: CreditData): GreenReadiness 
     });
   }
 
-  const score = creditScorePoints + utilizationPoints + derogatoryPoints + diversityPoints;
+  // Available savings contributes up to 10 points (optional; total score capped at 100)
+  let savingsPoints = 0;
+  const savings = availableSavings != null && availableSavings > 0 ? availableSavings : 0;
+  if (savings >= 20000) {
+    savingsPoints = 10;
+    factors.push({
+      label: "Available Savings",
+      impact: "positive",
+      description: `With ${savings.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })} in savings, you can fund many green upgrades upfront or put a strong down payment on financed options.`,
+    });
+  } else if (savings >= 10000) {
+    savingsPoints = 7;
+    factors.push({
+      label: "Available Savings",
+      impact: "positive",
+      description: `Your ${savings.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })} in savings can cover smaller green investments or supplement financing.`,
+    });
+  } else if (savings >= 5000) {
+    savingsPoints = 4;
+    factors.push({
+      label: "Available Savings",
+      impact: "neutral",
+      description: `With ${savings.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })} in savings, you have some flexibility for lower-cost green options or down payments.`,
+    });
+  } else if (savings > 0) {
+    savingsPoints = 2;
+    factors.push({
+      label: "Available Savings",
+      impact: "neutral",
+      description: `A small amount of savings (${savings.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}) can still help with free or low-cost green choices.`,
+    });
+  }
+  // If not provided or 0, no factor added and savingsPoints stays 0
+
+  const rawScore = creditScorePoints + utilizationPoints + derogatoryPoints + diversityPoints + savingsPoints;
+  const score = Math.min(100, rawScore);
 
   let tier: GreenReadiness["tier"];
   if (score >= 80) tier = "A";

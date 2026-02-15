@@ -157,7 +157,8 @@ export default function ResultsPage() {
         };
         const displayReport = resolvedTriBureau.experian ?? creditReportPayload;
         const creditData = extractCreditData(displayReport);
-        const greenReadiness = calculateGreenReadiness(creditData);
+        const savings = correctedForm.availableSavings ? parseFloat(correctedForm.availableSavings) : null;
+        const greenReadiness = calculateGreenReadiness(creditData, savings);
         const investments = getRecommendedInvestments(greenReadiness.tier);
         const bureauScores = {
           experian: extractScore(resolvedTriBureau.experian),
@@ -166,7 +167,6 @@ export default function ResultsPage() {
         };
         const flexIdResult = getDemoFlexIdCorrected();
         const fraudRes = getDemoFraudResult();
-        const savings = correctedForm.availableSavings ? parseFloat(correctedForm.availableSavings) : null;
 
         // Tradeline intelligence
         const tradelineProfile = extractTradelineProfile(displayReport);
@@ -318,7 +318,8 @@ export default function ResultsPage() {
       const displayReport =
         minEntry?.report ?? triBureau.experian ?? triBureau.transunion ?? triBureau.equifax ?? creditReport;
       const creditData = extractCreditData(displayReport);
-      const greenReadiness = calculateGreenReadiness(creditData);
+      const savings = correctedForm.availableSavings ? parseFloat(correctedForm.availableSavings) : null;
+      const greenReadiness = calculateGreenReadiness(creditData, savings);
       const investments = getRecommendedInvestments(greenReadiness.tier);
       const primaryReport = displayReport;
 
@@ -339,8 +340,6 @@ export default function ResultsPage() {
       } catch {
         /* non-fatal */
       }
-
-      const savings = correctedForm.availableSavings ? parseFloat(correctedForm.availableSavings) : null;
       const newResults: ResultsData = {
         userName: `${correctedForm.firstName} ${correctedForm.lastName}`,
         creditReport: primaryReport,
@@ -686,6 +685,7 @@ export default function ResultsPage() {
               <CreditSimulator
                 greenReadiness={data.greenReadiness}
                 investments={data.investments}
+                availableSavings={data.availableSavings}
               />
             </section>
 

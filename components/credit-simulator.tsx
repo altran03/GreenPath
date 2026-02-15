@@ -18,6 +18,7 @@ import {
 interface CreditSimulatorProps {
   greenReadiness: GreenReadiness;
   investments: GreenInvestment[];
+  availableSavings?: number | null;
 }
 
 function Counter({
@@ -52,7 +53,7 @@ function Counter({
   );
 }
 
-export function CreditSimulator({ greenReadiness, investments }: CreditSimulatorProps) {
+export function CreditSimulator({ greenReadiness, investments, availableSavings }: CreditSimulatorProps) {
   const maxPaydown = Math.round(greenReadiness.utilization * greenReadiness.totalCreditLimit);
   const [debtPaydown, setDebtPaydown] = useState(0);
   const [scoreImprovement, setScoreImprovement] = useState(0);
@@ -74,7 +75,7 @@ export function CreditSimulator({ greenReadiness, investments }: CreditSimulator
     tradelineCount: greenReadiness.tradelineCount + newAccounts,
   };
 
-  const simulated = calculateGreenReadiness(simulatedCreditData);
+  const simulated = calculateGreenReadiness(simulatedCreditData, availableSavings);
   const simInvestments = getRecommendedInvestments(simulated.tier);
   const simRate = getEstimatedRate(simulated.tier);
   const currentRate = getEstimatedRate(greenReadiness.tier);
