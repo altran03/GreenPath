@@ -23,6 +23,7 @@ import { ActionCards } from "@/components/action-cards";
 import { ImpactChart } from "@/components/impact-chart";
 import { CreditPath } from "@/components/credit-path";
 import { GreenChat } from "@/components/green-chat";
+import { VoiceChat } from "@/components/voice-chat";
 import { BureauComparison } from "@/components/bureau-comparison";
 import { VerificationBadges } from "@/components/verification-badges";
 import { AnomalyBanner } from "@/components/anomaly-banner";
@@ -747,13 +748,7 @@ export default function ResultsPage() {
           {/* ─── AI Tutor Tab ─── */}
           <TabsContent value="tutor" className="mt-0">
             <div className="animate-fade-up max-w-3xl mx-auto">
-              <h2 className="font-heading text-2xl text-grove mb-4">
-                Ask GreenPath AI
-              </h2>
-              <p className="text-stone text-sm mb-6">
-                Your AI tutor knows your credit profile, green readiness tier, and all available investments.
-              </p>
-              <GreenChat
+              <VoiceChat
                 greenReadiness={data.greenReadiness}
                 investments={data.investments}
                 availableSavings={data.availableSavings}

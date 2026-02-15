@@ -151,10 +151,35 @@ export default function GreenWrapped({
     };
   }, [currentSlide, advance]);
 
+  const goBack = useCallback(() => {
+    if (currentSlide > 0) {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      goToSlide(currentSlide - 1);
+    }
+  }, [currentSlide, goToSlide]);
+
   const handleClick = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     advance();
   };
+
+  // Global keyboard navigation (arrow keys work without focus)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight" || e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        if (timerRef.current) clearTimeout(timerRef.current);
+        advance();
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goBack();
+      } else if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [advance, goBack, onClose]);
 
   // Score ring SVG values
   const ringRadius = 88;
@@ -227,9 +252,6 @@ export default function GreenWrapped({
         onClick={handleClick}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") handleClick();
-        }}
         aria-label="Next slide"
       />
 
