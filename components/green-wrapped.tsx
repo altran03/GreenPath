@@ -197,10 +197,14 @@ export default function GreenWrapped({
 
   return (
     <div
-      className={`fixed inset-0 z-50 transition-opacity duration-700 ${
+      className={`fixed inset-0 z-50 transition-opacity duration-700 cursor-pointer ${
         isVisible ? "opacity-100" : "opacity-0"
       }`}
       style={{ fontFamily: "var(--font-body)" }}
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      aria-label="Tap to advance to next slide"
     >
       {/* Background */}
       <div className="absolute inset-0 bg-gradient-to-br from-grove via-[#1a3a2a] to-black" />
@@ -239,21 +243,15 @@ export default function GreenWrapped({
 
       {/* Skip button */}
       <button
-        onClick={onClose}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
         className="absolute top-6 right-6 z-10 flex items-center gap-1.5 text-white/50 hover:text-white/90 transition-colors text-sm font-medium"
       >
         Skip
         <X className="w-4 h-4" />
       </button>
-
-      {/* Clickable area to advance */}
-      <div
-        className="absolute inset-0 cursor-pointer"
-        onClick={handleClick}
-        role="button"
-        tabIndex={0}
-        aria-label="Next slide"
-      />
 
       {/* Slides container */}
       <div className="relative w-full h-full">
