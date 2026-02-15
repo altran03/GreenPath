@@ -422,7 +422,7 @@ export default function LoadingPage() {
         </p>
 
         {/* Timeline steps */}
-        <div className="w-full max-w-sm space-y-0">
+        <div className="w-[384px] max-w-full space-y-0">
           {steps.map((step, i) => {
             const Icon = step.icon;
             const isComplete = step.status === "complete";
@@ -512,7 +512,7 @@ export default function LoadingPage() {
       </div>
 
       {/* Trust footer */}
-      <div className="relative z-10 py-6 px-6">
+      <div className="absolute bottom-0 left-0 right-0 z-10 py-6 px-6">
         <div className="max-w-sm mx-auto text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
             <Shield className="w-3.5 h-3.5 text-meadow/40" />
